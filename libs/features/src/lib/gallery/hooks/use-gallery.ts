@@ -17,6 +17,7 @@ export function useGallery(
 ) {
   const [state, setState] = useState<UseGalleryState>({ conversions: [], loading: true, error: null });
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const conversionsRef = useRef<Conversion[]>([]);
 
   function hasNonTerminal(list: Conversion[]) {
     return list.some(c => !c.status.isTerminal());
@@ -27,6 +28,7 @@ export function useGallery(
     pollTimerRef.current = setTimeout(async () => {
       try {
         const fresh = await conversionRepo.findByOwnerId(ownerId);
+        conversionsRef.current = fresh;
         setState(s => ({ ...s, conversions: fresh }));
         scheduleRefresh(fresh);
       } catch {
@@ -40,6 +42,7 @@ export function useGallery(
 
     conversionRepo.findByOwnerId(ownerId).then(conversions => {
       if (cancelled) return;
+      conversionsRef.current = conversions;
       setState({ conversions, loading: false, error: null });
       scheduleRefresh(conversions);
     }).catch(err => {
@@ -56,11 +59,10 @@ export function useGallery(
   const removeProduct = async (productId: string) => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     await productRepo.delete(productId);
-    setState(s => {
-      const updated = s.conversions.filter(c => c.productId !== productId);
-      scheduleRefresh(updated);
-      return { ...s, conversions: updated };
-    });
+    const updated = conversionsRef.current.filter(c => c.productId !== productId);
+    conversionsRef.current = updated;
+    setState(s => ({ ...s, conversions: updated }));
+    scheduleRefresh(updated);
   };
 
   return { ...state, removeProduct };

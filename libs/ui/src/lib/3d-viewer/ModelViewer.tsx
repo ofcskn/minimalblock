@@ -41,6 +41,11 @@ export function ModelViewer({
 }: ModelViewerProps) {
   const ref = useRef<ModelViewerElement>(null);
   const sessionStart = useRef<number>(0);
+  const onSessionEndRef = useRef(onSessionEnd);
+
+  useEffect(() => {
+    onSessionEndRef.current = onSessionEnd;
+  }, [onSessionEnd]);
 
   useEffect(() => {
     const el = ref.current;
@@ -77,15 +82,13 @@ export function ModelViewer({
     const report = () => {
       if (sessionStart.current === 0) return;
       const ms = Date.now() - sessionStart.current;
-      if (ms > 500) onSessionEnd?.(ms);
+      if (ms > 500) onSessionEndRef.current?.(ms);
     };
     window.addEventListener('beforeunload', report);
     return () => {
       report();
       window.removeEventListener('beforeunload', report);
     };
-  // onSessionEnd intentionally excluded — capturing stable reference via closure is fine here
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleClick(e: React.MouseEvent<HTMLElement>) {
@@ -116,7 +119,7 @@ export function ModelViewer({
       class={className}
       onClick={handleClick}
     >
-      {hotspots.map((hs) => (
+      {hotspots.filter((hs) => hs.position && hs.normal).map((hs) => (
         <button
           key={hs.id}
           slot={`hotspot-${hs.id}`}
@@ -152,7 +155,7 @@ export function ModelViewer({
           </span>
         </button>
       ))}
-    {/* @ts-expect-error */}
+    {/* @ts-expect-error custom element closing tag for model-viewer */}
     </model-viewer>
   );
 }

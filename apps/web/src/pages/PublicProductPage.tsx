@@ -47,7 +47,7 @@ export function PublicProductPage() {
       setOgMeta(prod.name, prod.description);
 
       const convs = await conversionRepo.findByProductId(prod.id);
-      const completed = convs.find(c => c.status.isCompleted() && !!c.outputAsset) ?? convs[0] ?? null;
+      const completed = convs.find(c => c.status.isViewable() && !!c.outputAsset) ?? convs[0] ?? null;
       setConversion(completed ?? null);
       setLoading(false);
 
@@ -74,7 +74,7 @@ export function PublicProductPage() {
   }
 
   const publicUrl = window.location.href;
-  const hasGlb = conversion?.status.isCompleted() && !!conversion.outputAsset;
+  const hasGlb = conversion?.status.isViewable() && !!conversion.outputAsset;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -151,7 +151,7 @@ export function PublicProductPage() {
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Annotations</p>
             <div className="flex flex-wrap gap-2">
-              {product.hotspots.map(hs => (
+              {product.hotspots.filter(hs => hs.position && hs.normal).map(hs => (
                 <span key={hs.id} className="rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs text-indigo-700">
                   {hs.label}
                 </span>

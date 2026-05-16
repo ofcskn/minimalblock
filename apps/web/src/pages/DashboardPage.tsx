@@ -15,6 +15,11 @@ const EVENT_LABELS: Record<string, string> = {
   ar_opened: 'AR opens',
   hotspot_clicked: 'Hotspot clicks',
   embed_copied: 'Embed copies',
+  ai_analysis_completed: 'AI analyses',
+  hotspot_suggestion_accepted: 'Hotspot accepts',
+  conversion_approved: 'Approvals',
+  conversion_rejected: 'Rejections',
+  product_published: 'Publishes',
 };
 
 function StatPill({ label, value }: { label: string; value: number }) {

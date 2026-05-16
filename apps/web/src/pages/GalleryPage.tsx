@@ -15,9 +15,9 @@ const PAGE_SIZE = 12;
 const CATEGORY_TABS: { value: ProductCategory | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'furniture', label: 'Furniture' },
-  { value: 'appliance', label: 'Appliance' },
-  { value: 'vehicle', label: 'Vehicle' },
-  { value: 'house', label: 'House' },
+  { value: 'home-decor', label: 'Home Decor' },
+  { value: 'bags', label: 'Bags' },
+  { value: 'accessories', label: 'Accessories' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -116,7 +116,7 @@ export function GalleryPage({ user }: GalleryPageProps) {
               {visible.map(conversion => {
                 const product = products.get(conversion.productId);
                 const hotspotCount = product?.hotspots.length ?? 0;
-                const hasGlb = conversion.status.isCompleted() && !!conversion.outputAsset;
+                const hasGlb = conversion.status.isViewable() && !!conversion.outputAsset;
 
                 return (
                   <Card
