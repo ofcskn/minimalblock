@@ -1,4 +1,20 @@
 {
+  "permissions": {
+    "allow": [
+      "Edit(/.claude/skills/product-owner-decider/**)",
+      "Edit(/.claude/skills/gemini-ai-engineer/**)",
+      "Edit(/.claude/skills/nx-monorepo-manager/**)",
+      "Edit(/.claude/skills/web-developer/**)",
+      "Edit(/.claude/skills/supabase-engineer/**)",
+      "Edit(/.claude/skills/performance-engineer/**)",
+      "Edit(/.claude/skills/supabase-security-manager/**)",
+      "Edit(/.claude/skills/documentation-manager/**)",
+      "Bash(npx nx *)"
+    ]
+  },
+  "enabledPlugins": {
+    "nx@nx-claude-plugins": true
+  },
   "extraKnownMarketplaces": {
     "nx-claude-plugins": {
       "source": {
@@ -6,8 +22,5 @@
         "repo": "nrwl/nx-ai-agents-config"
       }
     }
-  },
-  "enabledPlugins": {
-    "nx@nx-claude-plugins": true
   }
 }
