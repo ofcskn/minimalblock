@@ -7,6 +7,7 @@ import { UploadPage } from '../pages/UploadPage.js';
 import { ProductDetailPage } from '../pages/ProductDetailPage.js';
 import { EmbedPage } from '../pages/EmbedPage.js';
 import { DashboardPage } from '../pages/DashboardPage.js';
+import { PublicProductPage } from '../pages/PublicProductPage.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { AppProvider, useApp } from '../context/AppContext.js';
 
@@ -24,7 +25,8 @@ function Header({ onSignOut }: { onSignOut: () => void }) {
 
 function AppRoutes() {
   const { supabase } = useApp();
-  const { user, loading, signOut } = useAuth(supabase);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { user, loading, signOut } = useAuth(supabase as any);
 
   if (loading) {
     return (
@@ -39,9 +41,7 @@ function AppRoutes() {
   }
 
   return (
-    <AppShell
-      header={<Header onSignOut={signOut} />}
-    >
+    <AppShell header={<Header onSignOut={signOut} />}>
       <Routes>
         <Route path="/" element={<GalleryPage user={user} />} />
         <Route path="/upload" element={<UploadPage user={user} />} />
@@ -57,7 +57,11 @@ export function App() {
   return (
     <ErrorBoundary>
       <Routes>
+        {/* Public routes — no auth required */}
         <Route path="/embed" element={<EmbedPage />} />
+        <Route path="/p/:idOrSlug" element={<PublicProductPage />} />
+
+        {/* Authenticated app shell */}
         <Route
           path="/*"
           element={

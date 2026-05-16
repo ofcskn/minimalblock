@@ -24,3 +24,7 @@ export type { AppShellProps } from './lib/layout/AppShell.js';
 // 3D Viewer
 export { ModelViewer, ModelViewerPlaceholder } from './lib/3d-viewer/ModelViewer.js';
 export type { ModelViewerProps } from './lib/3d-viewer/ModelViewer.js';
+
+// QR Code
+export { QrCode } from './lib/components/QrCode.js';
+export type { QrCodeProps } from './lib/components/QrCode.js';

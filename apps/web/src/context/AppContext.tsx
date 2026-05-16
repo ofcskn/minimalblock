@@ -1,23 +1,32 @@
 import { createContext, useContext, useMemo } from 'react';
-import { getSupabaseClient, SupabaseProductRepository, SupabaseConversionRepository, SupabaseImageUploader, SupabaseEventsRepository } from '@minimalblock/data';
+import {
+  getSupabaseClient,
+  SupabaseProductRepository,
+  SupabaseConversionRepository,
+  SupabaseImageUploader,
+  SupabaseEventsRepository,
+  SupabaseEmbedViewsRepository,
+} from '@minimalblock/data';
 import { createGenerativeModel, GeminiModelGenerator, GeminiRiskAnalyzer, ANALYSIS_MODEL_ID } from '@minimalblock/ai';
 import type { IProductRepository, IConversionRepository, IImageUploaderPort, IModelGeneratorPort } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface AppContextValue {
-  supabase: SupabaseClient;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any>;
   productRepo: IProductRepository;
   conversionRepo: IConversionRepository;
   imageUploader: IImageUploaderPort;
   modelGenerator: IModelGeneratorPort;
   riskAnalyzer: GeminiRiskAnalyzer;
   eventsRepo: SupabaseEventsRepository;
+  embedViewsRepo: SupabaseEmbedViewsRepository;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const value = useMemo<AppContextValue>(() => {
+  const value = useMemo(() => {
     const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] as string;
     const supabaseKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string;
     const geminiKey = import.meta.env['VITE_GEMINI_API_KEY'] as string;
@@ -34,10 +43,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       modelGenerator: new GeminiModelGenerator(geminiModel),
       riskAnalyzer: new GeminiRiskAnalyzer(analysisModel),
       eventsRepo: new SupabaseEventsRepository(supabase),
+      embedViewsRepo: new SupabaseEmbedViewsRepository(supabase),
     };
   }, []);
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <AppContext.Provider value={value as any}>{children}</AppContext.Provider>;
 }
 
 export function useApp(): AppContextValue {

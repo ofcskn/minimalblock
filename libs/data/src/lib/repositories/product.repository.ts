@@ -11,6 +11,7 @@ function rowToProduct(row: ProductRow): Product {
     description: row.description,
     category: row.category as ProductCategory,
     ownerId: row.owner_id,
+    slug: row.slug,
     hotspots: Array.isArray(row.hotspots) ? (row.hotspots as unknown as Hotspot[]) : [],
     aiInsights: Array.isArray(row.ai_insights) ? (row.ai_insights as unknown as AiInsight[]) : undefined,
     createdAt: new Date(row.created_at),
@@ -24,6 +25,13 @@ export class SupabaseProductRepository implements IProductRepository {
   async findById(id: string): Promise<Product | null> {
     const { data } = await this.client.from('products').select('*').eq('id', id).single();
     return data ? rowToProduct(data) : null;
+  }
+
+  async findBySlugOrId(slugOrId: string): Promise<Product | null> {
+    const { data: bySlug } = await this.client.from('products').select('*').eq('slug', slugOrId).maybeSingle();
+    if (bySlug) return rowToProduct(bySlug);
+    const { data: byId } = await this.client.from('products').select('*').eq('id', slugOrId).maybeSingle();
+    return byId ? rowToProduct(byId) : null;
   }
 
   async findByOwnerId(ownerId: string): Promise<Product[]> {
@@ -44,6 +52,7 @@ export class SupabaseProductRepository implements IProductRepository {
         description: product.description,
         category: product.category,
         owner_id: product.ownerId,
+        slug: product.slug,
         hotspots: product.hotspots as unknown as import('../supabase/database.types.js').Json,
         ai_insights: product.aiInsights.length > 0
           ? product.aiInsights as unknown as import('../supabase/database.types.js').Json

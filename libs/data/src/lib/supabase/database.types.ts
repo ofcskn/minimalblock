@@ -12,6 +12,7 @@ export type Database = {
           description: string;
           category: string;
           owner_id: string;
+          slug: string | null;
           hotspots: Json;
           ai_insights: Json | null;
           created_at: string;
@@ -23,6 +24,7 @@ export type Database = {
           description: string;
           category: string;
           owner_id: string;
+          slug?: string | null;
           hotspots?: Json;
           ai_insights?: Json | null;
           created_at?: string;
@@ -34,6 +36,7 @@ export type Database = {
           description?: string;
           category?: string;
           owner_id?: string;
+          slug?: string | null;
           hotspots?: Json;
           ai_insights?: Json | null;
           created_at?: string;
@@ -101,6 +104,7 @@ export type Database = {
           product_id: string;
           owner_id: string;
           event_type: string;
+          metadata: Json | null;
           created_at: string;
         };
         Insert: {
@@ -108,6 +112,7 @@ export type Database = {
           product_id: string;
           owner_id: string;
           event_type: string;
+          metadata?: Json | null;
           created_at?: string;
         };
         Update: {
@@ -115,6 +120,31 @@ export type Database = {
           product_id?: string;
           owner_id?: string;
           event_type?: string;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      embed_views: {
+        Row: {
+          id: string;
+          product_id: string;
+          referrer: string | null;
+          domain: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          referrer?: string | null;
+          domain?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          referrer?: string | null;
+          domain?: string | null;
           created_at?: string;
         };
         Relationships: [];
