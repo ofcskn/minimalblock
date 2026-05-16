@@ -57,7 +57,8 @@
   "workspaces": [
     "packages/*",
     "apps/*",
-    "libs/features"
+    "libs/features",
+    "libs/core"
   ],
   "dependencies": {
     "react": "^19.0.0",

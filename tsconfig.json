@@ -8,6 +8,9 @@
     },
     {
       "path": "./libs/features"
+    },
+    {
+      "path": "./libs/core"
     }
   ]
 }
