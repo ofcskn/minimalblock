@@ -12,7 +12,7 @@ swcJestConfig.swcrc = false;
 module.exports = {
   displayName: '@minimalblock/features',
   preset: '../../jest.preset.js',
-  testEnvironment: 'node',
+  testEnvironment: 'jest-environment-jsdom',
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
