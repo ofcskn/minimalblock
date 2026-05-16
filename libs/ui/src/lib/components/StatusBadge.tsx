@@ -5,6 +5,9 @@ const statusConfig: Record<ConversionStatusValue, { label: string; className: st
   processing: { label: 'Processing', className: 'bg-blue-100 text-blue-800 animate-pulse' },
   completed: { label: 'Completed', className: 'bg-green-100 text-green-800' },
   failed: { label: 'Failed', className: 'bg-red-100 text-red-800' },
+  awaiting_approval: { label: 'Awaiting approval', className: 'bg-amber-100 text-amber-800' },
+  approved: { label: 'Approved', className: 'bg-emerald-100 text-emerald-800' },
+  rejected: { label: 'Rejected', className: 'bg-rose-100 text-rose-800' },
 };
 
 export interface StatusBadgeProps {
