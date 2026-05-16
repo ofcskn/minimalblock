@@ -156,6 +156,30 @@ function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 48) || 'product';
 }
 
+function updateJob(
+  job: GenerationJob,
+  patch: Partial<ConstructorParameters<typeof GenerationJob>[0]>,
+): GenerationJob {
+  return new GenerationJob({
+    id: job.id,
+    conversionId: job.conversionId,
+    ownerId: job.ownerId,
+    provider: job.provider,
+    providerJobId: job.providerJobId,
+    status: job.status,
+    attempt: job.attempt,
+    costCredits: job.costCredits,
+    errorMessage: job.errorMessage,
+    requestPayload: job.requestPayload,
+    responsePayload: job.responsePayload,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    createdAt: job.createdAt,
+    updatedAt: new Date(),
+    ...patch,
+  });
+}
+
 async function fetchAssetBase64(asset: MediaAsset): Promise<{ mimeType: string; data: string }> {
   const response = await fetch(asset.url);
   if (!response.ok) {
@@ -430,6 +454,13 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
     let outputAsset: MediaAsset;
     if (req.manualModelAsset) {
       outputAsset = toMediaAsset(req.manualModelAsset, 'generated-model');
+      job = await jobRepo.save(
+        updateJob(job, {
+          status: 'succeeded',
+          responsePayload: { outputStorageKey: outputAsset.storageKey, source: 'manual-upload' },
+          finishedAt: new Date(),
+        }),
+      );
     } else {
       const generator = new GeminiModelGenerator(createGenerativeModel(ctx.env.geminiApiKey));
       const generated = await generator.generate({
@@ -439,13 +470,11 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
       });
       outputAsset = await uploadGeneratedModel(ctx.admin, ctx.user.id, generated.outputAsset, product.name);
       job = await jobRepo.save(
-        new GenerationJob({
-          ...job,
+        updateJob(job, {
           status: 'succeeded',
           costCredits: Math.ceil(generated.tokensUsed / 1000),
           responsePayload: { tokensUsed: generated.tokensUsed, outputStorageKey: outputAsset.storageKey },
           finishedAt: new Date(),
-          updatedAt: new Date(),
         }),
       );
     }
@@ -456,12 +485,10 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
     const message = error instanceof Error ? error.message : 'Conversion failed';
     conversion = await conversionRepo.save(conversion.markFailed(message));
     job = await jobRepo.save(
-      new GenerationJob({
-        ...job,
+      updateJob(job, {
         status: 'failed',
         errorMessage: message,
         finishedAt: new Date(),
-        updatedAt: new Date(),
       }),
     );
   }
