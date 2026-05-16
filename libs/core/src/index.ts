@@ -21,3 +21,7 @@ export * from './lib/adapters/ports/product-repository.port.js';
 // Utils
 export * from './lib/utils/id-generator.js';
 export * from './lib/utils/file-validator.js';
+export * from './lib/utils/product-category.js';
+
+// Contracts
+export * from './lib/contracts/api-contracts.js';

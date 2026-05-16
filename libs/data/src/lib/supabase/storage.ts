@@ -13,11 +13,14 @@ export class SupabaseImageUploader implements IImageUploaderPort {
     if (error) throw new Error(`Upload failed: ${error.message}`);
 
     const { data } = this.client.storage.from(BUCKET).getPublicUrl(key);
+    const mimeType = (input.file as File).type as MediaAsset['mimeType'];
     return new MediaAsset({
       url: data.publicUrl,
       storageKey: key,
-      mimeType: (input.file as File).type as MediaAsset['mimeType'],
-      kind: 'source-image',
+      mimeType,
+      kind: mimeType.startsWith('model/') || mimeType === 'application/octet-stream'
+        ? 'generated-model'
+        : 'source-image',
       sizeBytes: (input.file as File).size,
     });
   }

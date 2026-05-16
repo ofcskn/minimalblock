@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - libs/ai
+  - libs/core
+  - libs/data
+  - libs/features
+  - libs/ui

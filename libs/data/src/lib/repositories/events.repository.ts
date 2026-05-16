@@ -8,7 +8,13 @@ export type EventType =
   | 'hotspot_clicked'
   | 'embed_copied'
   | 'session_started'
-  | 'session_ended';
+  | 'session_ended'
+  | 'ai_analysis_started'
+  | 'ai_analysis_completed'
+  | 'hotspot_suggestion_accepted'
+  | 'conversion_approved'
+  | 'conversion_rejected'
+  | 'product_published';
 
 export interface ProductStats {
   productId: string;

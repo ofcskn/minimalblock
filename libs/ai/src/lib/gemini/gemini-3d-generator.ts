@@ -14,7 +14,7 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
     const imageBuffer = await imageResp.arrayBuffer();
     const imageBytes = new Uint8Array(imageBuffer);
     let binary = '';
-    for (let i = 0; i < imageBytes.byteLength; i++) {
+    for (let i = 0; i < imageBytes.byteLength; i += 1) {
       binary += String.fromCharCode(imageBytes[i]);
     }
     const imageBase64 = btoa(binary);
@@ -32,7 +32,7 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
     const glbBase64 = result.response.text();
     const tokensUsed = result.response.usageMetadata?.totalTokenCount ?? 0;
 
-    const glbBytes = Uint8Array.from(atob(glbBase64), c => c.charCodeAt(0));
+    const glbBytes = Uint8Array.from(atob(glbBase64), (value) => value.charCodeAt(0));
 
     // Return base64 encoded GLB; the caller (app layer) handles storage upload
     const outputAsset = new MediaAsset({

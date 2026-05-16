@@ -1,4 +1,11 @@
-import { Product, IProductRepository, ProductCategory, Hotspot, AiInsight } from '@minimalblock/core';
+import {
+  Product,
+  IProductRepository,
+  Hotspot,
+  ProductAiAnalysis,
+  SuggestedHotspot,
+  migrateLegacyProductCategory,
+} from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../supabase/database.types.js';
 
@@ -9,11 +16,16 @@ function rowToProduct(row: ProductRow): Product {
     id: row.id,
     name: row.name,
     description: row.description,
-    category: row.category as ProductCategory,
+    category: migrateLegacyProductCategory(row.category),
     ownerId: row.owner_id,
     slug: row.slug,
     hotspots: Array.isArray(row.hotspots) ? (row.hotspots as unknown as Hotspot[]) : [],
-    aiInsights: Array.isArray(row.ai_insights) ? (row.ai_insights as unknown as AiInsight[]) : undefined,
+    hotspotsSuggested: Array.isArray(row.hotspots_suggested)
+      ? (row.hotspots_suggested as unknown as SuggestedHotspot[])
+      : [],
+    aiAnalysis: row.ai_insights && !Array.isArray(row.ai_insights)
+      ? (row.ai_insights as unknown as ProductAiAnalysis)
+      : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   });
@@ -54,8 +66,10 @@ export class SupabaseProductRepository implements IProductRepository {
         owner_id: product.ownerId,
         slug: product.slug,
         hotspots: product.hotspots as unknown as import('../supabase/database.types.js').Json,
-        ai_insights: product.aiInsights.length > 0
-          ? product.aiInsights as unknown as import('../supabase/database.types.js').Json
+        hotspots_suggested: product.hotspotsSuggested as unknown as import('../supabase/database.types.js').Json,
+        hotspots_suggested_at: product.hotspotsSuggested.length > 0 ? new Date().toISOString() : null,
+        ai_insights: product.aiAnalysis
+          ? product.aiAnalysis as unknown as import('../supabase/database.types.js').Json
           : null,
       })
       .select()

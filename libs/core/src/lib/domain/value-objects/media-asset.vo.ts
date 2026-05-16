@@ -1,4 +1,10 @@
-export type MediaAssetType = 'image/jpeg' | 'image/png' | 'image/webp' | 'model/gltf-binary' | 'model/gltf+json';
+export type MediaAssetType =
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'model/gltf-binary'
+  | 'model/gltf+json'
+  | 'application/octet-stream';
 export type MediaAssetKind = 'source-image' | 'generated-model';
 
 export interface MediaAssetProps {
