@@ -60,7 +60,8 @@
     "libs/features",
     "libs/core",
     "libs/data",
-    "libs/ui"
+    "libs/ui",
+    "libs/ai"
   ],
   "dependencies": {
     "react": "^19.0.0",
