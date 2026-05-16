@@ -48,11 +48,49 @@ describe('ConversionStatus', () => {
     it('returns true for failed', () => {
       expect(ConversionStatus.failed().isTerminal()).toBe(true);
     });
+    it('returns true for approved', () => {
+      expect(ConversionStatus.approved().isTerminal()).toBe(true);
+    });
+    it('returns true for rejected', () => {
+      expect(ConversionStatus.rejected().isTerminal()).toBe(true);
+    });
     it('returns false for pending', () => {
       expect(ConversionStatus.pending().isTerminal()).toBe(false);
     });
     it('returns false for processing', () => {
       expect(ConversionStatus.processing().isTerminal()).toBe(false);
+    });
+    it('returns false for awaiting_approval (merchant must act)', () => {
+      expect(ConversionStatus.awaitingApproval().isTerminal()).toBe(false);
+    });
+  });
+
+  describe('approval predicates', () => {
+    it('isAwaitingApproval', () => {
+      expect(ConversionStatus.awaitingApproval().isAwaitingApproval()).toBe(true);
+      expect(ConversionStatus.processing().isAwaitingApproval()).toBe(false);
+    });
+    it('isApproved', () => {
+      expect(ConversionStatus.approved().isApproved()).toBe(true);
+      expect(ConversionStatus.completed().isApproved()).toBe(false);
+    });
+    it('isRejected', () => {
+      expect(ConversionStatus.rejected().isRejected()).toBe(true);
+      expect(ConversionStatus.failed().isRejected()).toBe(false);
+    });
+  });
+
+  describe('isViewable', () => {
+    it('returns true for completed (legacy) and approved', () => {
+      expect(ConversionStatus.completed().isViewable()).toBe(true);
+      expect(ConversionStatus.approved().isViewable()).toBe(true);
+    });
+    it('returns false for awaiting_approval, rejected, processing, pending, failed', () => {
+      expect(ConversionStatus.awaitingApproval().isViewable()).toBe(false);
+      expect(ConversionStatus.rejected().isViewable()).toBe(false);
+      expect(ConversionStatus.processing().isViewable()).toBe(false);
+      expect(ConversionStatus.pending().isViewable()).toBe(false);
+      expect(ConversionStatus.failed().isViewable()).toBe(false);
     });
   });
 
