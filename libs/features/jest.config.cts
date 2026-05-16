@@ -10,7 +10,7 @@ const swcJestConfig = JSON.parse(
 swcJestConfig.swcrc = false;
 
 module.exports = {
-  displayName: '@org/features',
+  displayName: '@minimalblock/features',
   preset: '../../jest.preset.js',
   testEnvironment: 'node',
   transform: {

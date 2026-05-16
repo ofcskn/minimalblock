@@ -27,7 +27,7 @@ export default defineConfig(() => ({
     },
   },
   test: {
-    name: '@org/web',
+    name: '@minimalblock/web',
     watch: false,
     globals: true,
     environment: 'jsdom',
