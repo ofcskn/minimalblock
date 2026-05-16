@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Conversion, generateId } from '@minimalblock/core';
-import type { Hotspot, Product, AiInsight } from '@minimalblock/core';
+import type { Hotspot, Product, AiInsight, ProductCategory } from '@minimalblock/core';
 import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
@@ -9,6 +9,14 @@ import type { SupabaseUser } from '../types.js';
 interface ProductDetailPageProps {
   user: SupabaseUser;
 }
+
+const CATEGORIES: { value: ProductCategory; label: string }[] = [
+  { value: 'furniture', label: 'Furniture' },
+  { value: 'appliance', label: 'Appliance' },
+  { value: 'vehicle', label: 'Vehicle' },
+  { value: 'house', label: 'House / Building' },
+  { value: 'other', label: 'Other' },
+];
 
 async function downloadGlb(url: string, filename: string) {
   const response = await fetch(url);
@@ -21,8 +29,8 @@ async function downloadGlb(url: string, filename: string) {
   URL.revokeObjectURL(anchor.href);
 }
 
-function buildEmbedSnippet(modelUrl: string, name: string): string {
-  const iframeSrc = `${window.location.origin}/embed?model=${encodeURIComponent(modelUrl)}&name=${encodeURIComponent(name)}`;
+function buildEmbedSnippet(modelUrl: string, name: string, productId: string): string {
+  const iframeSrc = `${window.location.origin}/embed?model=${encodeURIComponent(modelUrl)}&name=${encodeURIComponent(name)}&pid=${productId}`;
   return `<iframe\n  src="${iframeSrc}"\n  style="width:100%;height:400px;border:none;border-radius:12px"\n  allowfullscreen\n  title="${name} — 3D preview"\n></iframe>`;
 }
 
@@ -41,6 +49,15 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // Edit metadata state
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [metaForm, setMetaForm] = useState({ name: '', description: '', category: 'other' as ProductCategory });
+  const [savingMeta, setSavingMeta] = useState(false);
+
+  // Delete state
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Hotspot editor state
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
@@ -75,14 +92,39 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       if (prod) {
         setProduct(prod);
         setHotspots(prod.hotspots);
-        if (prod.aiInsights.length > 0) setInsights(prod.aiInsights);
+        setMetaForm({ name: prod.name, description: prod.description, category: prod.category });
+        if (prod.aiInsights.length > 0) {
+          setInsights(prod.aiInsights);
+        } else {
+          // Auto-trigger analysis after 50 views, once per product per browser.
+          const autoKey = `auto_analysed_${prod.id}`;
+          if (!localStorage.getItem(autoKey)) {
+            eventsRepo.getViewCount(prod.id).then(count => {
+              if (count >= 50) {
+                localStorage.setItem(autoKey, '1');
+                setProduct(p => p); // trigger runAnalysis via a dedicated flag below
+                setAnalysingRisk(true);
+              }
+            }).catch(() => null);
+          }
+        }
       }
       setLoading(false);
     }).catch(err => {
       setError(err instanceof Error ? err.message : 'Failed to load');
       setLoading(false);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, conversionRepo, productRepo, user.id]);
+
+  // When auto-analysis flag is set (analysingRisk=true with no product loaded yet),
+  // actually run it once product is available.
+  useEffect(() => {
+    if (analysingRisk && product && insights.length === 0) {
+      runAnalysis();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysingRisk, product]);
 
   async function handleDownload() {
     if (!conversion?.outputAsset) return;
@@ -95,6 +137,30 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       setDownloadError(err instanceof Error ? err.message : 'Download failed');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function saveMeta() {
+    if (!product) return;
+    setSavingMeta(true);
+    try {
+      const updated = product.withUpdatedMeta(metaForm);
+      const saved = await productRepo.save(updated);
+      setProduct(saved);
+      setEditingMeta(false);
+    } finally {
+      setSavingMeta(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!product) return;
+    setDeleting(true);
+    try {
+      await productRepo.delete(product.id);
+      navigate('/');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -189,12 +255,22 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const productName = product?.name ?? filename;
   const createdAt = conversion.createdAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   const modelUrl = conversion.outputAsset?.url ?? '';
+  const publicUrl = product ? `${window.location.origin}${product.publicUrl}` : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700">← Gallery</button>
-        <h1 className="text-2xl font-bold text-gray-900 truncate">{productName}</h1>
+        {editingMeta ? (
+          <input
+            autoFocus
+            value={metaForm.name}
+            onChange={e => setMetaForm(f => ({ ...f, name: e.target.value }))}
+            className="flex-1 rounded-lg border border-indigo-400 px-3 py-1 text-xl font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        ) : (
+          <h1 className="text-2xl font-bold text-gray-900 truncate">{productName}</h1>
+        )}
         <StatusBadge status={conversion.status.value} />
       </div>
 
@@ -217,7 +293,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                   lastRotateEvent.current = now;
                   eventsRepo.track(conversion.productId, user.id, 'model_rotated').catch(() => null);
                 }}
-                onHotspotClick={() => eventsRepo.track(conversion.productId, user.id, 'hotspot_clicked').catch(() => null)}
+                onSessionEnd={(ms) => eventsRepo.track(conversion.productId, user.id, 'session_ended', { duration_ms: ms }).catch(() => null)}
+                onHotspotClick={(hsId) => eventsRepo.track(conversion.productId, user.id, 'hotspot_clicked', { hotspot_id: hsId, hotspot_label: hotspots.find(h => h.id === hsId)?.label }).catch(() => null)}
               />
               {editMode && (
                 <div className="absolute top-3 left-3 right-3 flex items-center justify-between rounded-lg bg-indigo-600/90 px-3 py-2 text-white text-sm backdrop-blur-sm">
@@ -244,12 +321,18 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       {/* Actions row */}
       {conversion.status.isCompleted() && conversion.outputAsset && (
         <div className="flex flex-wrap gap-2">
-          <Button onClick={handleDownload} loading={downloading}>
-            Download GLB
-          </Button>
-          <Button variant="secondary" onClick={() => setEmbedOpen(true)}>
-            Share / Embed
-          </Button>
+          <Button onClick={handleDownload} loading={downloading}>Download GLB</Button>
+          <Button variant="secondary" onClick={() => setEmbedOpen(true)}>Share / Embed</Button>
+          {publicUrl && (
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-indigo-600 px-4 py-2 text-base font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+            >
+              Public page ↗
+            </a>
+          )}
           {!editMode && (
             <Button variant="secondary" onClick={() => setEditMode(true)}>
               {hotspots.length > 0 ? `Edit Hotspots (${hotspots.length})` : 'Add Hotspots'}
@@ -260,11 +343,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       )}
 
       {/* Hotspot label dialog */}
-      <Modal
-        open={!!pendingHotspot}
-        onClose={() => setPendingHotspot(null)}
-        title="Name this hotspot"
-      >
+      <Modal open={!!pendingHotspot} onClose={() => setPendingHotspot(null)} title="Name this hotspot">
         <div className="space-y-4">
           <p className="text-sm text-gray-500">Enter a short label for this point on the model (e.g. "Seat material", "Width: 60cm").</p>
           <input
@@ -298,40 +377,93 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         </Card>
       )}
 
-      {/* Info row */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <img
-              src={conversion.sourceAsset.url}
-              alt="Source image"
-              className="h-16 w-16 rounded-lg object-cover border border-gray-200"
-            />
-            <div>
-              <p className="text-sm font-medium text-gray-900">{filename}</p>
-              <p className="text-xs text-gray-500">Uploaded {createdAt}</p>
-              <p className="text-xs text-gray-400">{(conversion.sourceAsset.sizeBytes / 1024).toFixed(1)} KB · {conversion.sourceAsset.mimeType}</p>
-            </div>
+      {/* Product details / edit form */}
+      <Card>
+        <div className="flex items-start justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-900">Product details</h2>
+          <div className="flex gap-2">
+            {editingMeta ? (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => { setEditingMeta(false); setMetaForm({ name: product?.name ?? '', description: product?.description ?? '', category: product?.category ?? 'other' }); }}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={saveMeta} loading={savingMeta}>Save</Button>
+              </>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => setEditingMeta(true)}>Edit details</Button>
+            )}
           </div>
-
-          {conversion.status.isFailed() && conversion.errorMessage && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
-          )}
         </div>
 
-        {(conversion.status.isPending() || conversion.status.isProcessing()) && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Spinner size="sm" />
-            Generating 3D model…
+        {editingMeta ? (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+              <textarea
+                rows={3}
+                value={metaForm.description}
+                onChange={e => setMetaForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Describe the product…"
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+              <select
+                value={metaForm.category}
+                onChange={e => setMetaForm(f => ({ ...f, category: e.target.value as ProductCategory }))}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <img
+                src={conversion.sourceAsset.url}
+                alt="Source image"
+                className="h-16 w-16 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900">{filename}</p>
+                <p className="text-xs text-gray-500">Uploaded {createdAt}</p>
+                <p className="text-xs text-gray-400">{(conversion.sourceAsset.sizeBytes / 1024).toFixed(1)} KB · {conversion.sourceAsset.mimeType}</p>
+              </div>
+            </div>
+
+            {product?.description && (
+              <p className="text-sm text-gray-600">{product.description}</p>
+            )}
+
+            <div className="flex items-center gap-4 text-xs text-gray-400">
+              {product?.category && <span className="capitalize">{product.category}</span>}
+              {conversion.status.isCompleted() && conversion.outputAsset && (
+                <span>{(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>
+              )}
+            </div>
+
+            {conversion.status.isFailed() && conversion.errorMessage && (
+              <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
+            )}
+
+            {(conversion.status.isPending() || conversion.status.isProcessing()) && (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Spinner size="sm" />
+                Generating 3D model…
+              </div>
+            )}
           </div>
         )}
 
-        {conversion.status.isCompleted() && conversion.outputAsset && (
-          <p className="text-xs text-gray-400 self-end">
-            {(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB
-          </p>
-        )}
-      </div>
+        {/* Danger zone */}
+        <div className="mt-6 pt-4 border-t border-gray-100 flex justify-end">
+          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setDeleteOpen(true)}>
+            Delete product
+          </Button>
+        </div>
+      </Card>
 
       {/* Confidence Analysis card */}
       {conversion.status.isCompleted() && (
@@ -341,19 +473,12 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <h2 className="text-sm font-semibold text-gray-900">Buyer Confidence Analysis</h2>
               <p className="text-xs text-gray-500 mt-0.5">AI-generated recommendations to reduce returns</p>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={runAnalysis}
-              loading={analysingRisk}
-            >
+            <Button size="sm" variant="secondary" onClick={runAnalysis} loading={analysingRisk}>
               {insights.length > 0 ? 'Re-analyse' : 'Analyse'}
             </Button>
           </div>
 
-          {analysisError && (
-            <p className="text-xs text-red-600 mb-3">{analysisError}</p>
-          )}
+          {analysisError && <p className="text-xs text-red-600 mb-3">{analysisError}</p>}
 
           {insights.length > 0 ? (
             <ul className="space-y-3">
@@ -396,15 +521,30 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
           <pre className="rounded-lg bg-gray-900 text-gray-100 text-xs p-4 overflow-x-auto whitespace-pre-wrap break-all">
             {embedType === 'iframe'
-              ? buildEmbedSnippet(modelUrl, productName)
+              ? buildEmbedSnippet(modelUrl, productName, conversion.productId)
               : buildModelViewerSnippet(modelUrl)}
           </pre>
 
           <Button
             className="w-full justify-center"
-            onClick={() => copySnippet(embedType === 'iframe' ? buildEmbedSnippet(modelUrl, productName) : buildModelViewerSnippet(modelUrl))}
+            onClick={() => copySnippet(embedType === 'iframe' ? buildEmbedSnippet(modelUrl, productName, conversion.productId) : buildModelViewerSnippet(modelUrl))}
           >
             {copied ? '✓ Copied!' : 'Copy snippet'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete product">
+        <p className="text-sm text-gray-600">
+          This will permanently delete <strong>{productName}</strong>, its 3D model, all hotspots, AI insights, and interaction history. This cannot be undone.
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDelete} loading={deleting}>
+            Delete
           </Button>
         </div>
       </Modal>

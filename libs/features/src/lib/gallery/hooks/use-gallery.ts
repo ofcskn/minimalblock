@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Conversion } from '@minimalblock/core';
-import type { IConversionRepository } from '@minimalblock/core';
+import type { IConversionRepository, IProductRepository } from '@minimalblock/core';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -10,7 +10,11 @@ export interface UseGalleryState {
   error: string | null;
 }
 
-export function useGallery(repository: IConversionRepository, ownerId: string) {
+export function useGallery(
+  conversionRepo: IConversionRepository,
+  productRepo: IProductRepository,
+  ownerId: string,
+) {
   const [state, setState] = useState<UseGalleryState>({ conversions: [], loading: true, error: null });
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -22,11 +26,11 @@ export function useGallery(repository: IConversionRepository, ownerId: string) {
     if (!hasNonTerminal(list)) return;
     pollTimerRef.current = setTimeout(async () => {
       try {
-        const fresh = await repository.findByOwnerId(ownerId);
+        const fresh = await conversionRepo.findByOwnerId(ownerId);
         setState(s => ({ ...s, conversions: fresh }));
         scheduleRefresh(fresh);
       } catch {
-        // silently ignore poll errors — the initial error state already handles the failure case
+        // silently ignore poll errors
       }
     }, POLL_INTERVAL_MS);
   }
@@ -34,7 +38,7 @@ export function useGallery(repository: IConversionRepository, ownerId: string) {
   useEffect(() => {
     let cancelled = false;
 
-    repository.findByOwnerId(ownerId).then(conversions => {
+    conversionRepo.findByOwnerId(ownerId).then(conversions => {
       if (cancelled) return;
       setState({ conversions, loading: false, error: null });
       scheduleRefresh(conversions);
@@ -47,17 +51,17 @@ export function useGallery(repository: IConversionRepository, ownerId: string) {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, ownerId]);
+  }, [conversionRepo, ownerId]);
 
-  const remove = async (id: string) => {
+  const removeProduct = async (productId: string) => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    await repository.delete(id);
+    await productRepo.delete(productId);
     setState(s => {
-      const updated = s.conversions.filter(c => c.id !== id);
+      const updated = s.conversions.filter(c => c.productId !== productId);
       scheduleRefresh(updated);
       return { ...s, conversions: updated };
     });
   };
 
-  return { ...state, remove };
+  return { ...state, removeProduct };
 }

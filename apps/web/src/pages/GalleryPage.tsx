@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGallery } from '@minimalblock/features';
+import type { Product, ProductCategory } from '@minimalblock/core';
 import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
@@ -9,19 +10,40 @@ interface GalleryPageProps {
   user: SupabaseUser;
 }
 
+const PAGE_SIZE = 12;
+
+const CATEGORY_TABS: { value: ProductCategory | 'all'; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'furniture', label: 'Furniture' },
+  { value: 'appliance', label: 'Appliance' },
+  { value: 'vehicle', label: 'Vehicle' },
+  { value: 'house', label: 'House' },
+  { value: 'other', label: 'Other' },
+];
+
 export function GalleryPage({ user }: GalleryPageProps) {
-  const { conversionRepo } = useApp();
-  const { conversions, loading, error, remove } = useGallery(conversionRepo, user.id);
+  const { conversionRepo, productRepo } = useApp();
+  const { conversions, loading, error, removeProduct } = useGallery(conversionRepo, productRepo, user.id);
   const navigate = useNavigate();
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const [products, setProducts] = useState<Map<string, Product>>(new Map());
+  const [category, setCategory] = useState<ProductCategory | 'all'>('all');
+  const [page, setPage] = useState(PAGE_SIZE);
+  const [pendingDeleteProductId, setPendingDeleteProductId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  useEffect(() => {
+    productRepo.findByOwnerId(user.id).then(list => {
+      setProducts(new Map(list.map(p => [p.id, p])));
+    });
+  }, [productRepo, user.id, conversions]);
+
   async function confirmDelete() {
-    if (!pendingDeleteId) return;
+    if (!pendingDeleteProductId) return;
     setDeleting(true);
-    await remove(pendingDeleteId);
+    await removeProduct(pendingDeleteProductId);
     setDeleting(false);
-    setPendingDeleteId(null);
+    setPendingDeleteProductId(null);
   }
 
   if (loading) {
@@ -53,62 +75,130 @@ export function GalleryPage({ user }: GalleryPageProps) {
     );
   }
 
+  const filtered = conversions.filter(c =>
+    category === 'all' || products.get(c.productId)?.category === category
+  );
+  const visible = filtered.slice(0, page);
+  const hasMore = filtered.length > page;
+
   return (
     <>
       <div>
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">My 3D Models</h1>
           <Button onClick={() => navigate('/upload')}>+ New conversion</Button>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {conversions.map(conversion => (
-            <Card
-              key={conversion.id}
-              className="overflow-hidden p-0 cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => navigate(`/product/${conversion.id}`)}
+        {/* Category filter tabs */}
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+          {CATEGORY_TABS.map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => { setCategory(tab.value); setPage(PAGE_SIZE); }}
+              className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                category === tab.value
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
             >
-              <div className="h-56 bg-gray-100">
-                {conversion.status.isCompleted() && conversion.outputAsset ? (
-                  <ModelViewer modelUrl={conversion.outputAsset.url} className="h-full" />
-                ) : (
-                  <ModelViewerPlaceholder className="h-full" />
-                )}
-              </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <p className="truncate text-sm font-medium text-gray-900">
-                    {conversion.sourceAsset.storageKey.split('/').pop() ?? 'Product'}
-                  </p>
-                  <StatusBadge status={conversion.status.value} />
-                </div>
-                {conversion.status.isFailed() && conversion.errorMessage && (
-                  <p className="mt-1 text-xs text-red-600">{conversion.errorMessage}</p>
-                )}
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={e => { e.stopPropagation(); setPendingDeleteId(conversion.id); }}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </Card>
+              {tab.label}
+            </button>
           ))}
         </div>
+
+        {filtered.length === 0 ? (
+          <div className="py-16 text-center text-sm text-gray-400">
+            No models in this category yet.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {visible.map(conversion => {
+                const product = products.get(conversion.productId);
+                const hotspotCount = product?.hotspots.length ?? 0;
+                const hasGlb = conversion.status.isCompleted() && !!conversion.outputAsset;
+
+                return (
+                  <Card
+                    key={conversion.id}
+                    className="overflow-hidden p-0 cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => navigate(`/product/${conversion.id}`)}
+                  >
+                    <div className="h-56 bg-gray-100 relative">
+                      {hasGlb ? (
+                        <ModelViewer modelUrl={conversion.outputAsset!.url} className="h-full" />
+                      ) : (
+                        <ModelViewerPlaceholder className="h-full" />
+                      )}
+
+                      {/* Badges */}
+                      <div className="absolute top-2 left-2 flex gap-1.5">
+                        {hasGlb && (
+                          <span className="rounded-full bg-indigo-600/90 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+                            AR
+                          </span>
+                        )}
+                        {hotspotCount > 0 && (
+                          <span className="rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-gray-700 backdrop-blur-sm">
+                            {hotspotCount} {hotspotCount === 1 ? 'hotspot' : 'hotspots'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium text-gray-900">
+                          {product?.name ?? conversion.sourceAsset.storageKey.split('/').pop() ?? 'Product'}
+                        </p>
+                        <StatusBadge status={conversion.status.value} />
+                      </div>
+
+                      {product?.category && (
+                        <p className="mt-0.5 text-xs text-gray-400 capitalize">{product.category}</p>
+                      )}
+
+                      {conversion.status.isFailed() && conversion.errorMessage && (
+                        <p className="mt-1 text-xs text-red-600">{conversion.errorMessage}</p>
+                      )}
+
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={e => { e.stopPropagation(); setPendingDeleteProductId(conversion.productId); }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {hasMore && (
+              <div className="mt-8 flex justify-center">
+                <Button variant="secondary" onClick={() => setPage(p => p + PAGE_SIZE)}>
+                  Load more ({filtered.length - page} remaining)
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <Modal
-        open={pendingDeleteId !== null}
-        onClose={() => setPendingDeleteId(null)}
-        title="Delete 3D model"
+        open={pendingDeleteProductId !== null}
+        onClose={() => setPendingDeleteProductId(null)}
+        title="Delete product"
       >
-        <p className="text-sm text-gray-600">This will permanently delete the conversion and its generated model. This action cannot be undone.</p>
+        <p className="text-sm text-gray-600">
+          This will permanently delete the product, its 3D model, and all interaction history. This cannot be undone.
+        </p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setPendingDeleteId(null)} disabled={deleting}>
+          <Button variant="secondary" onClick={() => setPendingDeleteProductId(null)} disabled={deleting}>
             Cancel
           </Button>
           <Button variant="danger" onClick={confirmDelete} loading={deleting}>

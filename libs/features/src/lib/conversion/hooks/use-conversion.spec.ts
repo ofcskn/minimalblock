@@ -1,7 +1,7 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useConversion } from './use-conversion.js';
-import { Conversion, MediaAsset, ConversionStatus } from '@minimalblock/core';
-import type { IConversionRepository, IModelGeneratorPort } from '@minimalblock/core';
+import { MediaAsset } from '@minimalblock/core';
+import type { IConversionRepository, IModelGeneratorPort, Conversion } from '@minimalblock/core';
 
 const sourceAsset = new MediaAsset({
   url: 'https://cdn/img.jpg',
@@ -18,10 +18,6 @@ const outputAsset = new MediaAsset({
   kind: 'generated-model',
   sizeBytes: 512000,
 });
-
-function makeConversion(id: string, status: 'pending' | 'processing' | 'completed' | 'failed'): Conversion {
-  return new Conversion({ id, productId: 'prod-1', ownerId: 'user-1', sourceAsset, status: ConversionStatus.from(status), createdAt: new Date(), updatedAt: new Date() });
-}
 
 function makeRepo(overrides: Partial<IConversionRepository> = {}): IConversionRepository {
   const saved: Record<string, Conversion> = {};
