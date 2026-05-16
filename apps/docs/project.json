@@ -1,0 +1,33 @@
+{
+  "name": "docs",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "tags": [],
+  "targets": {
+    "serve": {
+      "command": "vitepress dev src",
+      "options": {
+        "cwd": "{projectRoot}"
+      }
+    },
+    "dev": {
+      "command": "vitepress dev src",
+      "options": {
+        "cwd": "{projectRoot}"
+      }
+    },
+    "build": {
+      "command": "vitepress build src",
+      "options": {
+        "cwd": "{projectRoot}"
+      }
+    },
+    "preview": {
+      "command": "vitepress preview src",
+      "options": {
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}
