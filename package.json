@@ -48,6 +48,7 @@
     "eslint-plugin-react-hooks": "5.0.0",
     "eslint-plugin-vue": "^9.16.1",
     "jest": "^30.0.2",
+    "jest-environment-jsdom": "^30.4.1",
     "jest-environment-node": "^30.0.2",
     "jest-util": "^30.0.2",
     "jiti": "2.4.2",

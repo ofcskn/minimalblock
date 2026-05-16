@@ -4,6 +4,8 @@ import { AppShell, Spinner } from '@minimalblock/ui';
 import { AuthPage } from '../pages/AuthPage.js';
 import { GalleryPage } from '../pages/GalleryPage.js';
 import { UploadPage } from '../pages/UploadPage.js';
+import { ProductDetailPage } from '../pages/ProductDetailPage.js';
+import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { AppProvider, useApp } from '../context/AppContext.js';
 
 function Header({ onSignOut }: { onSignOut: () => void }) {
@@ -43,6 +45,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<GalleryPage user={user} />} />
         <Route path="/upload" element={<UploadPage user={user} />} />
+        <Route path="/product/:id" element={<ProductDetailPage user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
@@ -51,9 +54,11 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <AppProvider>
-      <AppRoutes />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <AppRoutes />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
 

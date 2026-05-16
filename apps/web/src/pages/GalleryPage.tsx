@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGallery } from '@minimalblock/features';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Button, Spinner, Card } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -12,6 +13,16 @@ export function GalleryPage({ user }: GalleryPageProps) {
   const { conversionRepo } = useApp();
   const { conversions, loading, error, remove } = useGallery(conversionRepo, user.id);
   const navigate = useNavigate();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!pendingDeleteId) return;
+    setDeleting(true);
+    await remove(pendingDeleteId);
+    setDeleting(false);
+    setPendingDeleteId(null);
+  }
 
   if (loading) {
     return (
@@ -43,46 +54,68 @@ export function GalleryPage({ user }: GalleryPageProps) {
   }
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">My 3D Models</h1>
-        <Button onClick={() => navigate('/upload')}>+ New conversion</Button>
+    <>
+      <div>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">My 3D Models</h1>
+          <Button onClick={() => navigate('/upload')}>+ New conversion</Button>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {conversions.map(conversion => (
+            <Card
+              key={conversion.id}
+              className="overflow-hidden p-0 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate(`/product/${conversion.id}`)}
+            >
+              <div className="h-56 bg-gray-100">
+                {conversion.status.isCompleted() && conversion.outputAsset ? (
+                  <ModelViewer modelUrl={conversion.outputAsset.url} className="h-full" />
+                ) : (
+                  <ModelViewerPlaceholder className="h-full" />
+                )}
+              </div>
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <p className="truncate text-sm font-medium text-gray-900">
+                    {conversion.sourceAsset.storageKey.split('/').pop() ?? 'Product'}
+                  </p>
+                  <StatusBadge status={conversion.status.value} />
+                </div>
+                {conversion.status.isFailed() && conversion.errorMessage && (
+                  <p className="mt-1 text-xs text-red-600">{conversion.errorMessage}</p>
+                )}
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={e => { e.stopPropagation(); setPendingDeleteId(conversion.id); }}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {conversions.map(conversion => (
-          <Card key={conversion.id} className="overflow-hidden p-0">
-            <div className="h-56 bg-gray-100">
-              {conversion.status.isCompleted() && conversion.outputAsset ? (
-                <ModelViewer modelUrl={conversion.outputAsset.url} className="h-full" />
-              ) : (
-                <ModelViewerPlaceholder className="h-full" />
-              )}
-            </div>
-            <div className="p-4">
-              <div className="flex items-center justify-between">
-                <p className="truncate text-sm font-medium text-gray-900">
-                  {conversion.sourceAsset.storageKey.split('/').pop() ?? 'Product'}
-                </p>
-                <StatusBadge status={conversion.status.value} />
-              </div>
-              {conversion.status.isFailed() && conversion.errorMessage && (
-                <p className="mt-1 text-xs text-red-600">{conversion.errorMessage}</p>
-              )}
-              <div className="mt-3 flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => remove(conversion.id)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
+      <Modal
+        open={pendingDeleteId !== null}
+        onClose={() => setPendingDeleteId(null)}
+        title="Delete 3D model"
+      >
+        <p className="text-sm text-gray-600">This will permanently delete the conversion and its generated model. This action cannot be undone.</p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setPendingDeleteId(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={confirmDelete} loading={deleting}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+    </>
   );
 }
