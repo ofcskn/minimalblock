@@ -22,31 +22,36 @@ export function useConversion(
     productCategory: string,
   ) => {
     setState({ conversion: null, loading: true, error: null });
-    try {
-      let conversion = Conversion.create(generateId(), productId, ownerId, sourceAsset);
-      conversion = await repository.save(conversion);
 
-      conversion = conversion.markProcessing();
-      await repository.save(conversion);
-      setState(s => ({ ...s, conversion }));
+    // Track the latest persisted conversion locally so the catch block can mark it failed
+    // without depending on React state (which would be a stale closure value).
+    let current: Conversion | null = null;
+
+    try {
+      current = Conversion.create(generateId(), productId, ownerId, sourceAsset);
+      current = await repository.save(current);
+
+      current = current.markProcessing();
+      current = await repository.save(current);
+      setState(s => ({ ...s, conversion: current }));
 
       const { outputAsset } = await generator.generate({ sourceAsset, productCategory });
-      conversion = conversion.markCompleted(outputAsset);
-      conversion = await repository.save(conversion);
-      setState({ conversion, loading: false, error: null });
-      return conversion;
+      current = current.markCompleted(outputAsset);
+      current = await repository.save(current);
+      setState({ conversion: current, loading: false, error: null });
+      return current;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Conversion failed';
-      if (state.conversion) {
-        const failed = state.conversion.markFailed(message);
-        await repository.save(failed).catch(() => null);
-        setState({ conversion: failed, loading: false, error: message });
+      if (current) {
+        const failed = current.markFailed(message);
+        const saved = await repository.save(failed).catch(() => failed);
+        setState({ conversion: saved, loading: false, error: message });
       } else {
         setState({ conversion: null, loading: false, error: message });
       }
       return null;
     }
-  }, [repository, generator, state.conversion]);
+  }, [repository, generator]);
 
   return { ...state, startConversion };
 }

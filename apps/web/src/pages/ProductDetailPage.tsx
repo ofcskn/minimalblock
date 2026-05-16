@@ -257,6 +257,12 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const modelUrl = conversion.outputAsset?.url ?? '';
   const publicUrl = product ? `${window.location.origin}${product.publicUrl}` : null;
 
+  // Stuck detection: conversions that have been pending/processing for >5 minutes are almost
+  // certainly never completing — generation normally takes 10-20s. Show actionable error UI.
+  const isStuck =
+    (conversion.status.isPending() || conversion.status.isProcessing()) &&
+    Date.now() - conversion.updatedAt.getTime() > 5 * 60_000;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
@@ -448,7 +454,14 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
             )}
 
-            {(conversion.status.isPending() || conversion.status.isProcessing()) && (
+            {isStuck && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                <p className="font-medium">This conversion appears to be stuck.</p>
+                <p className="mt-1 text-xs">Generation normally takes 10–20 seconds. You can delete this product and try again with a new upload.</p>
+              </div>
+            )}
+
+            {(conversion.status.isPending() || conversion.status.isProcessing()) && !isStuck && (
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Spinner size="sm" />
                 Generating 3D model…
