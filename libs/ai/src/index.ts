@@ -1,1 +1,13 @@
-export * from './lib/ai.js';
+// Gemini client factories
+export { createGeminiClient, createGenerativeModel, DEFAULT_MODEL_ID, ANALYSIS_MODEL_ID } from './lib/gemini/gemini-client.js';
+
+// Gemini implementations (constructor-injected with GenerativeModel)
+export { GeminiModelGenerator } from './lib/gemini/gemini-3d-generator.js';
+export { GeminiImageAnalyzer } from './lib/gemini/gemini-image-analyzer.js';
+
+// Prompts
+export { buildConvert2DTo3DPrompt, buildImageAnalysisPrompt } from './lib/prompts/convert-2d-to-3d.prompt.js';
+
+// Types
+export type { Convert2DTo3DRequest, AnalyzeImageRequest, QualityHint } from './lib/types/ai-request.types.js';
+export type { Convert2DTo3DResponse, ImageAnalysisResponse } from './lib/types/ai-response.types.js';
