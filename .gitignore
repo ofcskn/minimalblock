@@ -2,6 +2,10 @@
 
 # compiled output
 dist
+
+# vitepress
+apps/docs/src/.vitepress/cache
+apps/docs/src/.vitepress/dist
 tmp
 out-tsc
 

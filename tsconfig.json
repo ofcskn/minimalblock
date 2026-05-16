@@ -20,6 +20,9 @@
     },
     {
       "path": "./libs/ai"
+    },
+    {
+      "path": "./apps/docs"
     }
   ]
 }
