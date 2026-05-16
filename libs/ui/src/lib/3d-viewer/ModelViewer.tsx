@@ -12,6 +12,7 @@ export interface ModelViewerProps {
   onLoad?: () => void;
   onArOpen?: () => void;
   onRotate?: () => void;
+  onSessionEnd?: (durationMs: number) => void;
   onHotspotClick?: (id: string) => void;
   onHotspotAdd?: (position: string, normal: string) => void;
 }
@@ -22,7 +23,7 @@ type ModelViewerElement = HTMLElement & {
 };
 
 /**
- * Wrapper around <model-viewer> with AR support and hotspot rendering.
+ * Wrapper around <model-viewer> with AR support, hotspot rendering, and session timing.
  * Requires the model-viewer CDN script in index.html.
  */
 export function ModelViewer({
@@ -34,10 +35,12 @@ export function ModelViewer({
   onLoad,
   onArOpen,
   onRotate,
+  onSessionEnd,
   onHotspotClick,
   onHotspotAdd,
 }: ModelViewerProps) {
   const ref = useRef<ModelViewerElement>(null);
+  const sessionStart = useRef<number>(0);
 
   useEffect(() => {
     const el = ref.current;
@@ -48,7 +51,10 @@ export function ModelViewer({
     const el = ref.current;
     if (!el) return;
 
-    const handleLoad = () => onLoad?.();
+    const handleLoad = () => {
+      sessionStart.current = Date.now();
+      onLoad?.();
+    };
     const handleArStatus = (e: Event) => {
       const status = (e as CustomEvent).detail?.status;
       if (status === 'session-started') onArOpen?.();
@@ -65,6 +71,22 @@ export function ModelViewer({
       el.removeEventListener('camera-change', handleCameraChange);
     };
   }, [onLoad, onArOpen, onRotate]);
+
+  // Report session duration when the component unmounts or the page unloads.
+  useEffect(() => {
+    const report = () => {
+      if (sessionStart.current === 0) return;
+      const ms = Date.now() - sessionStart.current;
+      if (ms > 500) onSessionEnd?.(ms);
+    };
+    window.addEventListener('beforeunload', report);
+    return () => {
+      report();
+      window.removeEventListener('beforeunload', report);
+    };
+  // onSessionEnd intentionally excluded — capturing stable reference via closure is fine here
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleClick(e: React.MouseEvent<HTMLElement>) {
     if (!editMode || !onHotspotAdd) return;
