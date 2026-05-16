@@ -20,6 +20,12 @@ export type { StatusBadgeProps } from './lib/components/StatusBadge.js';
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';
+export { Header, HeaderActions, HeaderBrand, HeaderBreadcrumbs, HeaderMobileMenu, HeaderNotifications, HeaderProfileMenu, HeaderRoot, HeaderSearch, HeaderStoreSelector } from './lib/layout/Header.js';
+export type { HeaderActionItem, HeaderBrandConfig, HeaderBreadcrumb, HeaderNotification, HeaderProfileMenu as HeaderProfileMenuConfig, HeaderProps, HeaderSearchConfig, HeaderSearchResult, HeaderSearchScope, HeaderSelectorConfig, HeaderSelectorOption } from './lib/layout/header.types.js';
+
+// Navigation
+export { Sidebar } from './lib/navigation/Sidebar.js';
+export type { SidebarActionNode, SidebarDividerNode, SidebarNode, SidebarProps, SidebarSectionNode } from './lib/navigation/sidebar.types.js';
 
 // 3D Viewer
 export { ModelViewer, ModelViewerPlaceholder } from './lib/3d-viewer/ModelViewer.js';

@@ -1,18 +1,25 @@
 import React from 'react';
+import { cn } from '../utils/cn.js';
 
 export interface AppShellProps {
   header: React.ReactNode;
   children: React.ReactNode;
   sidebar?: React.ReactNode;
+  className?: string;
+  mainClassName?: string;
 }
 
-export function AppShell({ header, children, sidebar }: AppShellProps) {
+export function AppShell({ header, children, sidebar, className, mainClassName }: AppShellProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">{header}</header>
-      <div className="flex flex-1">
-        {sidebar && <aside className="hidden w-64 shrink-0 border-r border-gray-200 bg-white lg:block">{sidebar}</aside>}
-        <main className="flex-1 p-6">{children}</main>
+    <div className={cn('min-h-screen bg-slate-100', className)}>
+      <div className="flex min-h-screen flex-col">
+        {header}
+        <div className="flex flex-1 overflow-hidden">
+          {sidebar}
+          <main className={cn('min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8', mainClassName)}>
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );
