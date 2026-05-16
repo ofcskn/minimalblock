@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo } from 'react';
-import { getSupabaseClient, SupabaseProductRepository, SupabaseConversionRepository, SupabaseImageUploader } from '@minimalblock/data';
-import { createGenerativeModel, GeminiModelGenerator } from '@minimalblock/ai';
+import { getSupabaseClient, SupabaseProductRepository, SupabaseConversionRepository, SupabaseImageUploader, SupabaseEventsRepository } from '@minimalblock/data';
+import { createGenerativeModel, GeminiModelGenerator, GeminiRiskAnalyzer, ANALYSIS_MODEL_ID } from '@minimalblock/ai';
 import type { IProductRepository, IConversionRepository, IImageUploaderPort, IModelGeneratorPort } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -10,6 +10,8 @@ interface AppContextValue {
   conversionRepo: IConversionRepository;
   imageUploader: IImageUploaderPort;
   modelGenerator: IModelGeneratorPort;
+  riskAnalyzer: GeminiRiskAnalyzer;
+  eventsRepo: SupabaseEventsRepository;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -22,6 +24,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const supabase = getSupabaseClient(supabaseUrl, supabaseKey);
     const geminiModel = createGenerativeModel(geminiKey);
+    const analysisModel = createGenerativeModel(geminiKey, ANALYSIS_MODEL_ID);
 
     return {
       supabase,
@@ -29,6 +32,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       conversionRepo: new SupabaseConversionRepository(supabase),
       imageUploader: new SupabaseImageUploader(supabase),
       modelGenerator: new GeminiModelGenerator(geminiModel),
+      riskAnalyzer: new GeminiRiskAnalyzer(analysisModel),
+      eventsRepo: new SupabaseEventsRepository(supabase),
     };
   }, []);
 

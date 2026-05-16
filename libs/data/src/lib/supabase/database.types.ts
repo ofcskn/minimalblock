@@ -12,6 +12,8 @@ export type Database = {
           description: string;
           category: string;
           owner_id: string;
+          hotspots: Json;
+          ai_insights: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -21,6 +23,8 @@ export type Database = {
           description: string;
           category: string;
           owner_id: string;
+          hotspots?: Json;
+          ai_insights?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -30,6 +34,8 @@ export type Database = {
           description?: string;
           category?: string;
           owner_id?: string;
+          hotspots?: Json;
+          ai_insights?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -86,6 +92,30 @@ export type Database = {
           error_message?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      events: {
+        Row: {
+          id: string;
+          product_id: string;
+          owner_id: string;
+          event_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          owner_id: string;
+          event_type: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          owner_id?: string;
+          event_type?: string;
+          created_at?: string;
         };
         Relationships: [];
       };

@@ -43,7 +43,7 @@ export function UploadPage({ user }: UploadPageProps) {
 
     const now = new Date();
     const product = await productRepo.save(
-      new Product({ id: generateId(), name, description: '', category, ownerId: user.id, createdAt: now, updatedAt: now })
+      new Product({ id: generateId(), name, description: '', category, ownerId: user.id, hotspots: [], createdAt: now, updatedAt: now })
     );
 
     await startConversion(product.id, user.id, asset, category);

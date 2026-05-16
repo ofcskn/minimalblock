@@ -1,4 +1,4 @@
-import { Product, IProductRepository, ProductCategory } from '@minimalblock/core';
+import { Product, IProductRepository, ProductCategory, Hotspot, AiInsight } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../supabase/database.types.js';
 
@@ -11,6 +11,8 @@ function rowToProduct(row: ProductRow): Product {
     description: row.description,
     category: row.category as ProductCategory,
     ownerId: row.owner_id,
+    hotspots: Array.isArray(row.hotspots) ? (row.hotspots as unknown as Hotspot[]) : [],
+    aiInsights: Array.isArray(row.ai_insights) ? (row.ai_insights as unknown as AiInsight[]) : undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   });
@@ -42,6 +44,10 @@ export class SupabaseProductRepository implements IProductRepository {
         description: product.description,
         category: product.category,
         owner_id: product.ownerId,
+        hotspots: product.hotspots as unknown as import('../supabase/database.types.js').Json,
+        ai_insights: product.aiInsights.length > 0
+          ? product.aiInsights as unknown as import('../supabase/database.types.js').Json
+          : null,
       })
       .select()
       .single();
