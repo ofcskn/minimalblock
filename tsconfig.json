@@ -14,6 +14,9 @@
     },
     {
       "path": "./libs/data"
+    },
+    {
+      "path": "./libs/ui"
     }
   ]
 }

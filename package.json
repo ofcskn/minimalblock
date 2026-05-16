@@ -59,7 +59,8 @@
     "apps/*",
     "libs/features",
     "libs/core",
-    "libs/data"
+    "libs/data",
+    "libs/ui"
   ],
   "dependencies": {
     "react": "^19.0.0",
