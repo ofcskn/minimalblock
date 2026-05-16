@@ -1,6 +1,7 @@
 import { Conversion } from './conversion.aggregate.js';
 import { MediaAsset } from '../value-objects/media-asset.vo.js';
 import { ConversionStatus } from '../value-objects/conversion-status.vo.js';
+import { QualityReport } from '../value-objects/quality-report.vo.js';
 
 const sourceAsset = new MediaAsset({
   url: 'https://cdn/img.jpg',
@@ -83,6 +84,96 @@ describe('Conversion aggregate', () => {
     it('returns false for a different user', () => {
       const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset);
       expect(c.isAccessibleBy('user-2')).toBe(false);
+    });
+  });
+
+  describe('approval workflow', () => {
+    const quality = new QualityReport({
+      fileSizeBytes: 2_000_000,
+      triangleCount: 50_000,
+      textureMaxDim: 1024,
+      hasUSDZ: false,
+      arCompat: true,
+      warnings: [],
+    });
+
+    it('processing → awaiting_approval attaches quality + output', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset)
+        .markProcessing()
+        .markAwaitingApproval(outputAsset, quality);
+      expect(c.status.isAwaitingApproval()).toBe(true);
+      expect(c.outputAsset).toBe(outputAsset);
+      expect(c.qualityReport).toBe(quality);
+    });
+
+    it('rejects awaiting_approval from non-processing state', () => {
+      const pending = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset);
+      expect(() => pending.markAwaitingApproval(outputAsset, quality)).toThrow();
+    });
+
+    it('approve from awaiting_approval stamps approvedBy/approvedAt', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset)
+        .markProcessing()
+        .markAwaitingApproval(outputAsset, quality)
+        .approve('user-1');
+      expect(c.status.isApproved()).toBe(true);
+      expect(c.approvedBy).toBe('user-1');
+      expect(c.approvedAt).toBeInstanceOf(Date);
+    });
+
+    it('approve from legacy completed is allowed (backwards-compat)', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset)
+        .markProcessing()
+        .markCompleted(outputAsset)
+        .approve('user-1');
+      expect(c.status.isApproved()).toBe(true);
+    });
+
+    it('reject requires awaiting_approval and stores reason', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset)
+        .markProcessing()
+        .markAwaitingApproval(outputAsset, quality)
+        .reject('low quality');
+      expect(c.status.isRejected()).toBe(true);
+      expect(c.rejectionReason).toBe('low quality');
+    });
+
+    it('reject from processing throws', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset).markProcessing();
+      expect(() => c.reject('nope')).toThrow();
+    });
+
+    it('approve from processing throws', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset).markProcessing();
+      expect(() => c.approve('user-1')).toThrow();
+    });
+  });
+
+  describe('multi-image input', () => {
+    const second = new MediaAsset({
+      url: 'https://cdn/img2.jpg',
+      storageKey: 'u1/img2.jpg',
+      mimeType: 'image/jpeg',
+      kind: 'source-image',
+      sizeBytes: 4096,
+    });
+
+    it('defaults sourceAssets to [sourceAsset] when not provided', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset);
+      expect(c.sourceAssets).toEqual([sourceAsset]);
+    });
+
+    it('accepts multiple source assets', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset, [sourceAsset, second]);
+      expect(c.sourceAssets).toHaveLength(2);
+      expect(c.sourceAssets[1]).toBe(second);
+    });
+
+    it('preserves sourceAssets across transitions', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset, [sourceAsset, second])
+        .markProcessing('meshy');
+      expect(c.sourceAssets).toHaveLength(2);
+      expect(c.provider).toBe('meshy');
     });
   });
 
