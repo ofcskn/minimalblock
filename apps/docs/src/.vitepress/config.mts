@@ -45,6 +45,7 @@ export default defineConfig({
               items: [
                 { text: 'API Contracts', link: '/en/reference/api-contracts' },
                 { text: 'Database Schema', link: '/en/reference/database-schema' },
+                { text: 'Database Types', link: '/en/reference/database-types' },
                 { text: 'Product Categories', link: '/en/reference/product-categories' },
               ],
             },
@@ -106,6 +107,7 @@ export default defineConfig({
               items: [
                 { text: 'API Sözleşmeleri', link: '/tr/reference/api-contracts' },
                 { text: 'Veritabanı Şeması', link: '/tr/reference/database-schema' },
+                { text: 'Veritabanı Tipleri', link: '/tr/reference/database-types' },
                 { text: 'Ürün Kategorileri', link: '/tr/reference/product-categories' },
               ],
             },
