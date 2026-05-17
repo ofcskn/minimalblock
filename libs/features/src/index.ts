@@ -13,3 +13,6 @@ export type { UseGalleryState } from './lib/gallery/hooks/use-gallery.js';
 // Auth feature
 export { useAuth } from './lib/auth/hooks/use-auth.js';
 export type { UseAuthState } from './lib/auth/hooks/use-auth.js';
+
+// Admin / Analytics dashboard
+export { AnalyticsDashboard } from './lib/admin/dashboard/AnalyticsDashboard.js';
