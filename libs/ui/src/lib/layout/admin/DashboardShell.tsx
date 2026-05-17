@@ -97,6 +97,11 @@ export function DashboardShell(props: DashboardShellProps) {
           brand={brand}
           store={store}
           onNavigate={handleNavigate}
+          user={user}
+          profileActions={profileActions}
+          onProfileAction={onProfileAction}
+          language={language.value}
+          onLanguageChange={onLanguageChange}
         />
       </div>
 
@@ -123,6 +128,11 @@ export function DashboardShell(props: DashboardShellProps) {
               store={store}
               onNavigate={handleNavigate}
               hideCollapseToggle
+              user={user}
+              profileActions={profileActions}
+              onProfileAction={onProfileAction}
+              language={language.value}
+              onLanguageChange={onLanguageChange}
             />
           </div>
         </div>
