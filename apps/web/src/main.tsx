@@ -1,3 +1,4 @@
+import './i18n/index.js';
 import { StrictMode } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import * as ReactDOM from 'react-dom/client';

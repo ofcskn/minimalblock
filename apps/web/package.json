@@ -1,5 +1,9 @@
 {
   "name": "@minimalblock/web",
   "version": "0.0.1",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "i18next": "^26.2.0",
+    "react-i18next": "^17.0.8"
+  }
 }

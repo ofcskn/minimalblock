@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { RequirementItem } from '@minimalblock/ui';
 
 interface RequirementChecklistProps {
@@ -5,15 +6,16 @@ interface RequirementChecklistProps {
 }
 
 export function RequirementChecklist({ items }: RequirementChecklistProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-slate-900">
-          Upload requirements
+          {t('gallery.requirements.title')}
         </h3>
         <p className="mt-1 text-sm text-slate-500">
-          Strong source images lead to cleaner geometry and fewer failed
-          generations.
+          {t('gallery.requirements.description')}
         </p>
       </div>
 
