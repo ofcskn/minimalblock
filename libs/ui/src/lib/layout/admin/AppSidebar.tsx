@@ -1,9 +1,11 @@
 import { Icon } from './icons.js';
 import { SidebarSection } from './sidebar/SidebarSection.js';
 import type {
+  ProfileMenuAction,
   SidebarLinkNode,
   SidebarSection as SectionData,
   StoreContext,
+  UserProfile,
 } from './admin.types.js';
 
 interface AppSidebarProps {
@@ -16,19 +18,12 @@ interface AppSidebarProps {
   onNavigate?: (link: SidebarLinkNode) => void;
   /** Hide the desktop collapse toggle (used inside the mobile drawer). */
   hideCollapseToggle?: boolean;
+  user?: UserProfile;
+  profileActions?: ProfileMenuAction[];
+  onProfileAction?: (id: string) => void;
+  language?: string;
+  onLanguageChange?: (lang: string) => void;
 }
-
-const STATUS_DOT: Record<StoreContext['status'], string> = {
-  online: 'bg-emerald-500',
-  syncing: 'bg-amber-500',
-  offline: 'bg-slate-400',
-};
-
-const STATUS_LABEL: Record<StoreContext['status'], string> = {
-  online: 'Online',
-  syncing: 'Syncing',
-  offline: 'Offline',
-};
 
 export function AppSidebar({
   sections,
@@ -36,10 +31,17 @@ export function AppSidebar({
   onToggle,
   isActive,
   brand,
-  store,
   onNavigate,
   hideCollapseToggle,
+  user,
+  profileActions = [],
+  onProfileAction,
+  language = 'tr',
+  onLanguageChange,
 }: AppSidebarProps) {
+  const nonDestructive = profileActions.filter((a) => !a.destructive);
+  const destructive = profileActions.filter((a) => a.destructive);
+
   return (
     <aside
       aria-label="Primary navigation"
@@ -48,6 +50,7 @@ export function AppSidebar({
         (collapsed ? 'w-[72px]' : 'w-[272px]')
       }
     >
+      {/* Brand header */}
       <div
         className={
           'flex min-h-16 shrink-0 items-center border-b border-slate-200 bg-slate-50/70 ' +
@@ -60,9 +63,9 @@ export function AppSidebar({
         >
           <span
             aria-hidden="true"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white"
+            className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl"
           >
-            <Icon name="store" className="h-4 w-4" />
+            <img src="/favicon.png" alt="Minimal Block" className="h-9 w-9 object-cover" />
           </span>
           {!collapsed && (
             <span className="flex min-w-0 flex-col leading-tight">
@@ -89,6 +92,7 @@ export function AppSidebar({
         )}
       </div>
 
+      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <div className="space-y-3">
           {sections.map((section) => (
@@ -103,48 +107,104 @@ export function AppSidebar({
         </div>
       </nav>
 
-      {/* Footer card / collapse-expand button */}
-      {!collapsed && store && (
-        <div className="shrink-0 border-t border-slate-200 p-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                  Store status
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className={
-                      'h-2 w-2 rounded-full ' + STATUS_DOT[store.status]
-                    }
-                  />
-                  <span className="truncate text-sm font-medium text-slate-900">
-                    {store.name}
-                  </span>
+      {/* Footer */}
+      {user && (
+        <div className="shrink-0 border-t border-slate-200">
+          {collapsed ? (
+            /* Collapsed: icon-only buttons */
+            <div className="flex flex-col items-center gap-1 px-2 py-3">
+              {/* Language toggle compact */}
+              <button
+                type="button"
+                onClick={() => onLanguageChange?.(language === 'tr' ? 'en' : 'tr')}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-[11px] font-semibold text-slate-500 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                title={language.toUpperCase()}
+              >
+                {language.toUpperCase()}
+              </button>
+              {nonDestructive.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  title={action.label}
+                  onClick={() => onProfileAction?.(action.id)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                >
+                  {action.icon && <Icon name={action.icon} className="h-4 w-4" />}
+                </button>
+              ))}
+              {destructive.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  title={action.label}
+                  onClick={() => onProfileAction?.(action.id)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-red-500 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                >
+                  {action.icon && <Icon name={action.icon} className="h-4 w-4" />}
+                </button>
+              ))}
+            </div>
+          ) : (
+            /* Expanded: full footer */
+            <div className="px-3 py-3 space-y-0.5">
+              {/* Email */}
+              <div className="px-2 pb-2">
+                <p className="truncate text-[12px] text-slate-400">{user.email}</p>
+              </div>
+
+              {/* Language toggle */}
+              <div className="px-2 pb-2">
+                <div className="flex gap-1.5">
+                  {(['tr', 'en'] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => onLanguageChange?.(lang)}
+                      className={
+                        'flex-1 rounded-lg py-1.5 text-[12px] font-semibold uppercase tracking-wide transition-colors ' +
+                        (language === lang
+                          ? 'bg-indigo-600 text-white'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50')
+                      }
+                    >
+                      {lang}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <span
-                className={
-                  'rounded-full px-2 py-1 text-[11px] font-medium ' +
-                  (store.status === 'online'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : store.status === 'syncing'
-                      ? 'bg-amber-50 text-amber-700'
-                      : 'bg-slate-200 text-slate-600')
-                }
-              >
-                {STATUS_LABEL[store.status]}
-              </span>
+
+              {/* Non-destructive actions */}
+              {nonDestructive.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => onProfileAction?.(action.id)}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-[13px] text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                >
+                  {action.icon && (
+                    <Icon name={action.icon} className="h-4 w-4 shrink-0 text-slate-400" />
+                  )}
+                  {action.label}
+                </button>
+              ))}
+
+              {/* Destructive actions */}
+              {destructive.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => onProfileAction?.(action.id)}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-[13px] text-red-600 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                >
+                  {action.icon && (
+                    <Icon name={action.icon} className="h-4 w-4 shrink-0 text-red-500" />
+                  )}
+                  {action.label}
+                </button>
+              ))}
             </div>
-            <p className="mt-3 text-xs text-slate-500">
-              {store.productCount} products synced
-              {store.planName ? ` · ${store.planName}` : ''}
-            </p>
-            {store.localeLabel && (
-              <p className="mt-1 text-xs text-slate-400">{store.localeLabel}</p>
-            )}
-          </div>
+          )}
         </div>
       )}
 

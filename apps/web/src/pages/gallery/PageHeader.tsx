@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface PageHeaderProps {
   title: string;
   description: string;
@@ -18,12 +20,14 @@ export function PageHeader({
   onPrimaryAction,
   onSecondaryAction,
 }: PageHeaderProps) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Catalog
+            {t('gallery.catalog')}
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
             {title}

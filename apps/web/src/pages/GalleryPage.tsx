@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useGallery, type UseGalleryState } from '@minimalblock/features';
 import type { Product } from '@minimalblock/core';
 import type {
@@ -27,44 +28,6 @@ interface GalleryPageProps {
 
 const PAGE_SIZE = 12;
 
-const EMPTY_STATE_ACTIONS: EmptyStateAction[] = [
-  {
-    id: 'upload-product-photo',
-    label: 'Upload product photo',
-    tone: 'primary',
-  },
-  {
-    id: 'learn-3d-generation',
-    label: 'Learn about 3D generation',
-    tone: 'secondary',
-  },
-];
-
-const REQUIREMENT_ITEMS: RequirementItem[] = [
-  {
-    id: 'clear-photo',
-    label: 'Use a clear product photo',
-    description: 'Avoid blur, motion, and heavy compression artifacts.',
-  },
-  {
-    id: 'plain-background',
-    label: 'Use a plain background',
-    description: 'A simple backdrop improves edge detection and masking.',
-  },
-  {
-    id: 'jpg-or-png',
-    label: 'Upload JPG or PNG',
-    description:
-      'Standard raster formats keep the upload and conversion pipeline predictable.',
-  },
-  {
-    id: 'resolution',
-    label: 'Recommended minimum: 1800 × 1800',
-    description:
-      'Higher resolution gives the model generator more surface detail to work with.',
-  },
-];
-
 function mapStatus(status: string): 'ready' | 'processing' | 'failed' {
   if (status === 'completed' || status === 'approved') return 'ready';
   if (status === 'failed' || status === 'rejected') return 'failed';
@@ -76,7 +39,6 @@ function toGalleryModel(
   product?: Product,
 ): GalleryModel {
   const modelUrl = conversion.outputAsset?.url;
-
   return {
     id: conversion.id,
     productId: conversion.productId,
@@ -95,6 +57,7 @@ function toGalleryModel(
 
 export function GalleryPage({ user }: GalleryPageProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { conversionRepo, productRepo } = useApp();
   const { conversions, loading, error, removeProduct } = useGallery(
     conversionRepo,
@@ -107,9 +70,7 @@ export function GalleryPage({ user }: GalleryPageProps) {
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(PAGE_SIZE);
-  const [pendingDeleteProductId, setPendingDeleteProductId] = useState<
-    string | null
-  >(null);
+  const [pendingDeleteProductId, setPendingDeleteProductId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -119,10 +80,7 @@ export function GalleryPage({ user }: GalleryPageProps) {
   }, [productRepo, user.id, conversions]);
 
   const galleryModels = useMemo(
-    () =>
-      conversions.map((conversion) =>
-        toGalleryModel(conversion, products.get(conversion.productId)),
-      ),
+    () => conversions.map((conversion) => toGalleryModel(conversion, products.get(conversion.productId))),
     [conversions, products],
   );
 
@@ -131,18 +89,13 @@ export function GalleryPage({ user }: GalleryPageProps) {
       if (statusFilter === 'all') return true;
       return mapStatus(model.status) === statusFilter;
     });
-
     return [...visible].sort((left, right) => {
       switch (sortBy) {
-        case 'name':
-          return left.name.localeCompare(right.name);
-        case 'status':
-          return mapStatus(left.status).localeCompare(mapStatus(right.status));
-        case 'oldest':
-          return left.id.localeCompare(right.id);
+        case 'name': return left.name.localeCompare(right.name);
+        case 'status': return mapStatus(left.status).localeCompare(mapStatus(right.status));
+        case 'oldest': return left.id.localeCompare(right.id);
         case 'newest':
-        default:
-          return right.id.localeCompare(left.id);
+        default: return right.id.localeCompare(left.id);
       }
     });
   }, [galleryModels, sortBy, statusFilter]);
@@ -163,7 +116,6 @@ export function GalleryPage({ user }: GalleryPageProps) {
       navigate('/upload');
       return;
     }
-
     navigate('/dashboard');
   };
 
@@ -173,14 +125,25 @@ export function GalleryPage({ user }: GalleryPageProps) {
       checklist.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-
     navigate('/upload');
   };
+
+  const emptyStateActions: EmptyStateAction[] = [
+    { id: 'upload-product-photo', label: t('gallery.emptyActions.uploadPhoto'), tone: 'primary' },
+    { id: 'learn-3d-generation', label: t('gallery.emptyActions.learn3d'), tone: 'secondary' },
+  ];
+
+  const requirementItems: RequirementItem[] = [
+    { id: 'clear-photo', label: t('gallery.requirements.clearPhoto'), description: t('gallery.requirements.clearPhotoDesc') },
+    { id: 'plain-background', label: t('gallery.requirements.plainBackground'), description: t('gallery.requirements.plainBackgroundDesc') },
+    { id: 'jpg-or-png', label: t('gallery.requirements.jpgOrPng'), description: t('gallery.requirements.jpgOrPngDesc') },
+    { id: 'resolution', label: t('gallery.requirements.resolution'), description: t('gallery.requirements.resolutionDesc') },
+  ];
 
   if (loading) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-3xl border border-slate-200 bg-white">
-        <Spinner size="lg" label="Loading gallery…" />
+        <Spinner size="lg" label={t('gallery.loading')} />
       </div>
     );
   }
@@ -197,10 +160,10 @@ export function GalleryPage({ user }: GalleryPageProps) {
     <>
       <div className="space-y-5">
         <PageHeader
-          title="Gallery"
-          description="Generate and manage 3D product models from product images. Keep uploads, generation status, and review work in one place."
-          primaryActionLabel="Upload product photo"
-          secondaryActionLabel="View upload requirements"
+          title={t('gallery.title')}
+          description={t('gallery.description')}
+          primaryActionLabel={t('gallery.uploadPhoto')}
+          secondaryActionLabel={t('gallery.viewRequirements')}
           onPrimaryAction={() => navigate('/upload')}
           onSecondaryAction={handleViewRequirements}
         />
@@ -209,29 +172,26 @@ export function GalleryPage({ user }: GalleryPageProps) {
           status={statusFilter}
           sort={sortBy}
           view={viewMode}
-          onStatusChange={(value) => {
-            setStatusFilter(value);
-            setPage(PAGE_SIZE);
-          }}
+          onStatusChange={(value) => { setStatusFilter(value); setPage(PAGE_SIZE); }}
           onSortChange={setSortBy}
           onViewChange={setViewMode}
         />
 
         {galleryModels.length === 0 ? (
           <GalleryEmptyState
-            title="No 3D models yet"
-            description="Upload a product photo to create your first model. Once the image passes review, Minimal Block will generate a reusable 3D asset for your gallery and storefront."
-            actions={EMPTY_STATE_ACTIONS}
-            requirements={REQUIREMENT_ITEMS}
+            title={t('gallery.noModelsYet.title')}
+            description={t('gallery.noModelsYet.description')}
+            actions={emptyStateActions}
+            requirements={requirementItems}
             onAction={handlePageAction}
           />
         ) : filteredModels.length === 0 ? (
           <section className="rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">
-              No models match this filter
+              {t('gallery.noMatch.title')}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
-              Try a different status or sort option to find the models you need.
+              {t('gallery.noMatch.description')}
             </p>
           </section>
         ) : (
@@ -244,17 +204,13 @@ export function GalleryPage({ user }: GalleryPageProps) {
               }
             >
               {visibleModels.map((model) => {
-                const isReady =
-                  mapStatus(model.status) === 'ready' && !!model.modelUrl;
-
+                const isReady = mapStatus(model.status) === 'ready' && !!model.modelUrl;
                 return (
                   <article
                     key={model.id}
                     className={
                       'overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-slate-300 ' +
-                      (viewMode === 'list'
-                        ? 'flex flex-col gap-4 p-4 md:flex-row'
-                        : '')
+                      (viewMode === 'list' ? 'flex flex-col gap-4 p-4 md:flex-row' : '')
                     }
                   >
                     <button
@@ -262,41 +218,30 @@ export function GalleryPage({ user }: GalleryPageProps) {
                       onClick={() => navigate(`/product/${model.id}`)}
                       className={
                         'group text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ' +
-                        (viewMode === 'list'
-                          ? 'flex min-w-0 flex-1 flex-col gap-4 md:flex-row'
-                          : 'block')
+                        (viewMode === 'list' ? 'flex min-w-0 flex-1 flex-col gap-4 md:flex-row' : 'block')
                       }
                     >
                       <div
                         className={
                           'relative overflow-hidden bg-slate-100 ' +
-                          (viewMode === 'list'
-                            ? 'h-48 rounded-2xl md:h-40 md:w-56'
-                            : 'aspect-[4/3] w-full')
+                          (viewMode === 'list' ? 'h-48 rounded-2xl md:h-40 md:w-56' : 'aspect-[4/3] w-full')
                         }
                       >
                         {isReady && model.modelUrl ? (
-                          <ModelViewer
-                            modelUrl={model.modelUrl}
-                            className="h-full"
-                          />
+                          <ModelViewer modelUrl={model.modelUrl} className="h-full" />
                         ) : model.previewUrl ? (
-                          <img
-                            src={model.previewUrl}
-                            alt={model.name}
-                            className="h-full w-full object-cover"
-                          />
+                          <img src={model.previewUrl} alt={model.name} className="h-full w-full object-cover" />
                         ) : (
                           <ModelViewerPlaceholder className="h-full" />
                         )}
 
                         <div className="absolute left-3 top-3 flex items-center gap-2">
                           <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-700 backdrop-blur">
-                            {model.category ?? 'Uncategorized'}
+                            {model.category ?? t('gallery.uncategorized')}
                           </span>
                           {isReady && (
                             <span className="rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white">
-                              3D ready
+                              {t('gallery.ready3d')}
                             </span>
                           )}
                         </div>
@@ -310,17 +255,15 @@ export function GalleryPage({ user }: GalleryPageProps) {
                             </h2>
                             <p className="mt-1 text-sm text-slate-500">
                               {model.hotspotCount > 0
-                                ? `${model.hotspotCount} hotspot${model.hotspotCount === 1 ? '' : 's'} configured`
-                                : 'No hotspots configured yet'}
+                                ? t('gallery.hotspotsCount_one', { count: model.hotspotCount })
+                                : t('gallery.noHotspots')}
                             </p>
                           </div>
                           <StatusBadge status={model.status} />
                         </div>
 
                         {model.errorMessage && (
-                          <p className="mt-3 text-sm text-red-600">
-                            {model.errorMessage}
-                          </p>
+                          <p className="mt-3 text-sm text-red-600">{model.errorMessage}</p>
                         )}
 
                         <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
@@ -328,26 +271,20 @@ export function GalleryPage({ user }: GalleryPageProps) {
                             {mapStatus(model.status)}
                           </span>
                           <span className="text-sm text-indigo-600 transition-colors group-hover:text-indigo-700">
-                            Open details
+                            {t('gallery.openDetails')}
                           </span>
                         </div>
                       </div>
                     </button>
 
-                    <div
-                      className={
-                        viewMode === 'list' ? 'md:self-start' : 'px-4 pb-4'
-                      }
-                    >
+                    <div className={viewMode === 'list' ? 'md:self-start' : 'px-4 pb-4'}>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() =>
-                          setPendingDeleteProductId(model.productId)
-                        }
+                        onClick={() => setPendingDeleteProductId(model.productId)}
                         className="min-h-11 rounded-xl px-3 text-red-600 hover:bg-red-50 hover:text-red-700"
                       >
-                        Delete
+                        {t('gallery.delete')}
                       </Button>
                     </div>
                   </article>
@@ -359,12 +296,10 @@ export function GalleryPage({ user }: GalleryPageProps) {
               <div className="mt-6 flex justify-center">
                 <Button
                   variant="secondary"
-                  onClick={() =>
-                    setPage((currentPage) => currentPage + PAGE_SIZE)
-                  }
+                  onClick={() => setPage((currentPage) => currentPage + PAGE_SIZE)}
                   className="min-h-11 rounded-xl border-slate-200 px-4 text-slate-700 hover:bg-slate-50"
                 >
-                  Load more models
+                  {t('gallery.loadMore')}
                 </Button>
               </div>
             )}
@@ -375,22 +310,15 @@ export function GalleryPage({ user }: GalleryPageProps) {
       <Modal
         open={pendingDeleteProductId !== null}
         onClose={() => setPendingDeleteProductId(null)}
-        title="Delete product"
+        title={t('gallery.deleteModal.title')}
       >
-        <p className="text-sm text-gray-600">
-          This permanently deletes the product, its 3D model, and all
-          interaction history.
-        </p>
+        <p className="text-sm text-gray-600">{t('gallery.deleteModal.description')}</p>
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button
-            variant="secondary"
-            onClick={() => setPendingDeleteProductId(null)}
-            disabled={deleting}
-          >
-            Cancel
+          <Button variant="secondary" onClick={() => setPendingDeleteProductId(null)} disabled={deleting}>
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" onClick={confirmDelete} loading={deleting}>
-            Delete
+            {t('common.delete')}
           </Button>
         </div>
       </Modal>

@@ -19,12 +19,12 @@ export function SidebarSection({
 }: SidebarSectionProps) {
   return (
     <div className="space-y-1">
-      {!collapsed && (
+      {!collapsed && !!section.label && (
         <h3 className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
           {section.label}
         </h3>
       )}
-      {collapsed && (
+      {collapsed && !!section.label && (
         <div className="mx-2 mb-1 mt-2 h-px bg-slate-100" aria-hidden="true" />
       )}
       <ul className="space-y-0.5" aria-label={section.label}>

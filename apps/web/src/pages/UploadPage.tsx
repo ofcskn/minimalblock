@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
-  PRODUCT_CATEGORIES,
   QualityReport,
   validateImageFile,
   validateModelFile,
@@ -18,22 +18,6 @@ interface UploadPageProps {
   user: SupabaseUser;
 }
 
-function categoryLabel(category: ProductCategory): string {
-  switch (category) {
-    case 'furniture':
-      return 'Furniture';
-    case 'home-decor':
-      return 'Home Decor';
-    case 'bags':
-      return 'Bags';
-    case 'accessories':
-      return 'Accessories';
-    case 'other':
-    default:
-      return 'Other';
-  }
-}
-
 function toApiAsset(asset: MediaAsset): ApiMediaAssetInput {
   return {
     url: asset.url,
@@ -45,11 +29,10 @@ function toApiAsset(asset: MediaAsset): ApiMediaAssetInput {
 
 export function UploadPage({ user }: UploadPageProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { imageUploader, apiClient } = useApp();
 
-  const [category, setCategory] = useState<ProductCategory>('furniture');
-  const [productName, setProductName] = useState('');
-  const [description, setDescription] = useState('');
+  const [productDetails, setProductDetails] = useState('');
   const [sourceAssets, setSourceAssets] = useState<MediaAsset[]>([]);
   const [manualModelAsset, setManualModelAsset] = useState<MediaAsset | null>(null);
   const [uploadingSource, setUploadingSource] = useState(false);
@@ -58,7 +41,7 @@ export function UploadPage({ user }: UploadPageProps) {
   const [conversion, setConversion] = useState<ConversionSnapshot | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const canStart = sourceAssets.length > 0 && productName.trim().length > 0 && !submitting;
+  const canStart = sourceAssets.length > 0 && productDetails.trim().length > 0 && !submitting;
   const isPolling = conversion?.status === 'pending' || conversion?.status === 'processing';
 
   useEffect(() => {
@@ -72,7 +55,6 @@ export function UploadPage({ user }: UploadPageProps) {
         window.clearInterval(interval);
       }
     }, 2500);
-
     return () => window.clearInterval(interval);
   }, [apiClient, conversion, isPolling]);
 
@@ -88,15 +70,13 @@ export function UploadPage({ user }: UploadPageProps) {
       const nextAssets: MediaAsset[] = [];
       for (const file of files) {
         const validation = validateImageFile(file);
-        if (!validation.valid) {
-          throw new Error(validation.reason ?? 'Invalid source image.');
-        }
+        if (!validation.valid) throw new Error(validation.reason ?? 'Invalid source image.');
         const asset = await imageUploader.upload({ file, fileName: file.name, ownerId: user.id });
         nextAssets.push(asset);
       }
       setSourceAssets((current) => [...current, ...nextAssets]);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Upload failed.');
+      setSubmitError(error instanceof Error ? error.message : t('upload.uploadingSource'));
     } finally {
       setUploadingSource(false);
     }
@@ -105,11 +85,7 @@ export function UploadPage({ user }: UploadPageProps) {
   async function handleManualModel(file: File) {
     setSubmitError(null);
     const validation = validateModelFile(file);
-    if (!validation.valid) {
-      setSubmitError(validation.reason ?? 'Invalid model file.');
-      return;
-    }
-
+    if (!validation.valid) { setSubmitError(validation.reason ?? 'Invalid model file.'); return; }
     setUploadingModel(true);
     try {
       const asset = await imageUploader.upload({ file, fileName: file.name, ownerId: user.id });
@@ -126,12 +102,10 @@ export function UploadPage({ user }: UploadPageProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const text = productDetails.trim();
+      const firstLine = text.split('\n')[0]?.trim() ?? text;
       const response = await apiClient.createConversion({
-        product: {
-          name: productName.trim(),
-          description: description.trim(),
-          category,
-        },
+        product: { name: firstLine, description: text, category: '' as ProductCategory },
         sourceAssets: sourceAssets.map(toApiAsset),
         manualModelAsset: manualModelAsset ? toApiAsset(manualModelAsset) : undefined,
       });
@@ -149,103 +123,104 @@ export function UploadPage({ user }: UploadPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700">← Gallery</button>
-        <h1 className="text-2xl font-bold text-gray-900">New Product Conversion</h1>
+    <div className="space-y-6">
+      {/* Back link */}
+      <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700">
+        {t('upload.backGallery')}
+      </button>
+
+      {/* Main two-column layout */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        {/* Left — source images */}
+        <Card>
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">{t('upload.sourceImages')}</h2>
+              <p className="mt-1 text-xs text-gray-500">{t('upload.sourceImagesDesc')}</p>
+            </div>
+            <FileUpload
+              multiple
+              accept="image/jpeg,image/png,image/webp"
+              helperText={t('upload.sourceHelperText')}
+              onFilesSelected={handleSourceFiles}
+              disabled={uploadingSource || submitting}
+            />
+            {uploadingSource && (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Spinner size="sm" /> {t('upload.uploadingSource')}
+              </div>
+            )}
+            {sortedSourceAssets.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sortedSourceAssets.map((asset) => (
+                  <div key={asset.storageKey} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                    <img src={asset.url} alt={asset.storageKey} className="h-32 w-full object-cover" />
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-gray-900">{asset.storageKey.split('/').pop()}</p>
+                        <p className="text-xs text-gray-400">{(asset.sizeBytes / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <button onClick={() => removeSourceAsset(asset.storageKey)} className="text-xs text-red-500 hover:text-red-700">
+                        {t('upload.remove')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Right — product details */}
+        <Card>
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">3D Model Detayı</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Ürün adı, kategori ve açıklamayı serbest biçimde yazın. İlk satır ürün adı olarak kullanılır.
+              </p>
+            </div>
+
+            <textarea
+              rows={10}
+              value={productDetails}
+              onChange={(e) => setProductDetails(e.target.value)}
+              placeholder={'Meşe yemek sandalyesi\nMobilya · Ahşap\n\nSağlam meşe gövde, saten çelik ayaklar. Yemek masası ve ofis kullanımına uygundur.'}
+              className="block w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm leading-relaxed focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+
+            {submitError && (
+              <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</div>
+            )}
+
+            <Button
+              onClick={startConversion}
+              disabled={!canStart}
+              loading={submitting}
+              className="w-full"
+            >
+              {manualModelAsset ? t('upload.createReviewReady') : t('upload.startConversion')}
+            </Button>
+          </div>
+        </Card>
       </div>
 
-      <Card>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Product name</label>
-            <input
-              type="text"
-              value={productName}
-              onChange={(event) => setProductName(event.target.value)}
-              placeholder="e.g. Oak dining chair"
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as ProductCategory)}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            >
-              {PRODUCT_CATEGORIES.map((value) => (
-                <option key={value} value={value}>{categoryLabel(value)}</option>
-              ))}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Optional merchant notes or PDP description"
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </Card>
-
+      {/* Manuel GLB — full width below */}
       <Card>
         <div className="space-y-4">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">Source images</h2>
-            <p className="mt-1 text-xs text-gray-500">Upload multiple product angles. The API will use these as the source of truth for Gemini analysis and 3D generation.</p>
-          </div>
-          <FileUpload
-            multiple
-            accept="image/jpeg,image/png,image/webp"
-            helperText="JPEG, PNG, WebP — upload as many angles as you have"
-            onFilesSelected={handleSourceFiles}
-            disabled={uploadingSource || submitting}
-          />
-          {uploadingSource && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Spinner size="sm" /> Uploading source images…
-            </div>
-          )}
-          {sortedSourceAssets.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {sortedSourceAssets.map((asset) => (
-                <div key={asset.storageKey} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                  <img src={asset.url} alt={asset.storageKey} className="h-32 w-full object-cover" />
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-gray-900">{asset.storageKey.split('/').pop()}</p>
-                      <p className="text-xs text-gray-400">{(asset.sizeBytes / 1024).toFixed(1)} KB</p>
-                    </div>
-                    <button onClick={() => removeSourceAsset(asset.storageKey)} className="text-xs text-red-500 hover:text-red-700">
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Card>
-
-      <Card>
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">Manual GLB fallback</h2>
-            <p className="mt-1 text-xs text-gray-500">Optional. Upload a fallback GLB if you want to skip generation risk and go straight to merchant review.</p>
+            <h2 className="text-sm font-semibold text-gray-900">{t('upload.manualGlb')}</h2>
+            <p className="mt-1 text-xs text-gray-500">{t('upload.manualGlbDesc')}</p>
           </div>
           <FileUpload
             accept=".glb,model/gltf-binary,application/octet-stream"
-            helperText="GLB — optional fallback model for demo reliability"
+            helperText={t('upload.glbHelperText')}
             onFileSelected={handleManualModel}
             disabled={uploadingModel || submitting}
           />
           {uploadingModel && (
             <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Spinner size="sm" /> Uploading fallback GLB…
+              <Spinner size="sm" /> {t('upload.uploadingGlb')}
             </div>
           )}
           {manualModelAsset && (
@@ -255,30 +230,23 @@ export function UploadPage({ user }: UploadPageProps) {
                   <p className="text-sm font-medium text-gray-900">{manualModelAsset.storageKey.split('/').pop()}</p>
                   <p className="text-xs text-gray-400">{(manualModelAsset.sizeBytes / 1024).toFixed(1)} KB</p>
                 </div>
-                <button onClick={() => setManualModelAsset(null)} className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                <button onClick={() => setManualModelAsset(null)} className="text-xs text-red-500 hover:text-red-700">
+                  {t('upload.remove')}
+                </button>
               </div>
             </div>
           )}
         </div>
       </Card>
 
-      {submitError && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</div>
-      )}
-
-      {!conversion ? (
-        <div className="flex justify-end">
-          <Button onClick={startConversion} disabled={!canStart} loading={submitting}>
-            {manualModelAsset ? 'Create review-ready product' : 'Start Gemini conversion'}
-          </Button>
-        </div>
-      ) : (
+      {/* Conversion result */}
+      {conversion && (
         <Card>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900">Conversion status</h2>
-                <p className="mt-1 text-xs text-gray-500">This product is now being managed by the API workflow.</p>
+                <h2 className="text-sm font-semibold text-gray-900">{t('upload.conversionStatus')}</h2>
+                <p className="mt-1 text-xs text-gray-500">{t('upload.conversionStatusDesc')}</p>
               </div>
               <StatusBadge status={conversion.status} />
             </div>
@@ -295,7 +263,7 @@ export function UploadPage({ user }: UploadPageProps) {
 
             {isPolling && (
               <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Spinner size="sm" /> Waiting for API processing…
+                <Spinner size="sm" /> {t('upload.waitingProcessing')}
               </div>
             )}
 
@@ -307,12 +275,12 @@ export function UploadPage({ user }: UploadPageProps) {
               return (
                 <div className={`rounded-xl p-3 text-sm ${isCritical ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
                   <p className="font-medium">
-                    Asset quality score: {score}/100
+                    {t('upload.assetQuality', { score })}
                     {qaReport && <span className="ml-2 font-normal text-xs">({qaReport.status.replace(/_/g, ' ')})</span>}
                   </p>
                   {qaReport?.categoryMatch && (
                     <p className="mt-1 text-xs">
-                      Category match: {qaReport.categoryMatch.score}/10 — {qaReport.categoryMatch.reason}
+                      {t('upload.categoryMatch', { score: qaReport.categoryMatch.score, reason: qaReport.categoryMatch.reason })}
                     </p>
                   )}
                   {(conversion.qualityReport.warnings.length > 0 || (qaReport?.missingParts.length ?? 0) > 0) && (
@@ -321,7 +289,7 @@ export function UploadPage({ user }: UploadPageProps) {
                         <li key={warning}>• {warning}</li>
                       ))}
                       {qaReport?.missingParts.map((part) => (
-                        <li key={part}>• Missing: {part}</li>
+                        <li key={part}>• {t('upload.missing', { part })}</li>
                       ))}
                     </ul>
                   )}
@@ -341,12 +309,12 @@ export function UploadPage({ user }: UploadPageProps) {
             )}
 
             <div className="flex flex-wrap justify-end gap-3">
-              <Button variant="secondary" onClick={() => navigate('/')}>Back to gallery</Button>
+              <Button variant="secondary" onClick={() => navigate('/')}>{t('upload.backToGallery')}</Button>
               <Button
                 onClick={() => navigate(`/product/${conversion.id}`)}
                 variant={conversion.status === 'failed' ? 'secondary' : 'primary'}
               >
-                {conversion.status === 'failed' ? 'Review QA report' : 'Open merchant review'}
+                {conversion.status === 'failed' ? t('upload.reviewQa') : t('upload.openMerchantReview')}
               </Button>
             </div>
           </div>

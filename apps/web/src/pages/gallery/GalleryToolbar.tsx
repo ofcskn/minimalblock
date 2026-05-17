@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface GalleryToolbarProps {
   status: string;
   sort: string;
@@ -18,35 +20,37 @@ export function GalleryToolbar({
   onSortChange,
   onViewChange,
 }: GalleryToolbarProps) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row">
           <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-500">
-            Status
+            {t('gallery.toolbar.status')}
             <select
               value={status}
               onChange={(event) => onStatusChange(event.target.value)}
               className={controlClass}
             >
-              <option value="all">All models</option>
-              <option value="ready">Ready</option>
-              <option value="processing">Processing</option>
-              <option value="failed">Needs review</option>
+              <option value="all">{t('gallery.toolbar.allModels')}</option>
+              <option value="ready">{t('gallery.toolbar.ready')}</option>
+              <option value="processing">{t('gallery.toolbar.processing')}</option>
+              <option value="failed">{t('gallery.toolbar.needsReview')}</option>
             </select>
           </label>
 
           <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-500">
-            Sort
+            {t('gallery.toolbar.sort')}
             <select
               value={sort}
               onChange={(event) => onSortChange(event.target.value)}
               className={controlClass}
             >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="name">Product name</option>
-              <option value="status">Status</option>
+              <option value="newest">{t('gallery.toolbar.newestFirst')}</option>
+              <option value="oldest">{t('gallery.toolbar.oldestFirst')}</option>
+              <option value="name">{t('gallery.toolbar.productName')}</option>
+              <option value="status">{t('gallery.toolbar.status')}</option>
             </select>
           </label>
         </div>
@@ -67,7 +71,7 @@ export function GalleryToolbar({
                     : 'text-slate-500 hover:text-slate-700')
                 }
               >
-                {option === 'grid' ? 'Grid' : 'List'}
+                {option === 'grid' ? t('gallery.toolbar.grid') : t('gallery.toolbar.list')}
               </button>
             );
           })}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTrendyolPublish } from '../lib/trendyol/use-trendyol-publish.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -21,21 +22,6 @@ interface ProductDetailPageProps {
   user: SupabaseUser;
 }
 
-function categoryLabel(category: ProductCategory): string {
-  switch (category) {
-    case 'furniture':
-      return 'Furniture';
-    case 'home-decor':
-      return 'Home Decor';
-    case 'bags':
-      return 'Bags';
-    case 'accessories':
-      return 'Accessories';
-    case 'other':
-    default:
-      return 'Other';
-  }
-}
 
 function hydrateConversion(snapshot: ConversionSnapshot): Conversion {
   const sourceAssets = snapshot.sourceAssets.map((asset) => new MediaAsset({
@@ -96,6 +82,7 @@ function buildModelViewerSnippet(modelUrl: string): string {
 export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { conversionRepo, productRepo, eventsRepo, apiClient } = useApp();
 
   const [conversion, setConversion] = useState<Conversion | null>(null);
@@ -340,7 +327,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Spinner size="lg" label="Loading product review…" />
+        <Spinner size="lg" label={t('product.loading')} />
       </div>
     );
   }
@@ -348,8 +335,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   if (!conversion || !product) {
     return (
       <div className="mx-auto max-w-2xl">
-        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error ?? 'Model not found'}</div>
-        <Button variant="secondary" className="mt-4" onClick={() => navigate('/')}>Back to gallery</Button>
+        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error ?? t('product.notFound')}</div>
+        <Button variant="secondary" className="mt-4" onClick={() => navigate('/')}>{t('product.backGallery')}</Button>
       </div>
     );
   }
@@ -360,7 +347,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700">← Gallery</button>
+        <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700">{t('product.backGallery')}</button>
         {editingMeta ? (
           <input
             autoFocus
@@ -411,7 +398,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                       disabled={savingHotspots}
                       className="rounded bg-white px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
                     >
-                      {savingHotspots ? 'Saving…' : 'Save hotspots'}
+                      {savingHotspots ? '…' : t('product.saveHotspots')}
                     </button>
                   </div>
                 </div>
@@ -425,10 +412,10 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
       <div className="flex flex-wrap gap-2">
         {conversion.outputAsset && (
-          <Button onClick={handleDownload} loading={downloading}>Download GLB</Button>
+          <Button onClick={handleDownload} loading={downloading}>{t('product.download')}</Button>
         )}
         {conversion.status.isViewable() && conversion.outputAsset && (
-          <Button variant="secondary" onClick={() => setEmbedOpen(true)}>Share / Embed</Button>
+          <Button variant="secondary" onClick={() => setEmbedOpen(true)}>{t('product.embed')}</Button>
         )}
         {publicUrl && (
           <a
@@ -442,13 +429,13 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         )}
         {!editMode && conversion.outputAsset && (
           <Button variant="secondary" onClick={() => setEditMode(true)}>
-            {hotspots.length > 0 ? `Edit Hotspots (${hotspots.length})` : 'Add Hotspots'}
+            {hotspots.length > 0 ? t('product.editHotspots') : t('product.addHotspot')}
           </Button>
         )}
         {conversion.status.isAwaitingApproval() && (
           <>
-            <Button onClick={handleApprove} loading={busyAction === 'approve'}>Approve & publish</Button>
-            <Button variant="danger" onClick={() => setRejectOpen(true)}>Reject</Button>
+            <Button onClick={handleApprove} loading={busyAction === 'approve'}>{t('product.approve')}</Button>
+            <Button variant="danger" onClick={() => setRejectOpen(true)}>{t('product.reject')}</Button>
           </>
         )}
         {conversion.status.isFailed() && (
@@ -465,7 +452,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               }
             }}
           >
-            Publish to Trendyol
+            {t('product.publishTrendyol')}
           </Button>
         )}
         {downloadError && <p className="self-center text-xs text-red-600">{downloadError}</p>}
@@ -507,7 +494,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                   className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
                   {PRODUCT_CATEGORIES.map((value) => (
-                    <option key={value} value={value}>{categoryLabel(value)}</option>
+                    <option key={value} value={value}>{t(`category.${value}`)}</option>
                   ))}
                 </select>
               </div>
@@ -527,7 +514,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               </div>
               {product.description && <p className="text-sm text-gray-600">{product.description}</p>}
               <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-                <span>{categoryLabel(product.category)}</span>
+                <span>{t(`category.${product.category}`)}</span>
                 {conversion.outputAsset && <span>{(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>}
                 {qualityScore !== undefined && <span>Asset quality score: {qualityScore}/100</span>}
               </div>
@@ -605,7 +592,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
           <div className="mt-6 border-t border-gray-100 pt-4 flex justify-end">
             <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setDeleteOpen(true)}>
-              Delete product
+              {t('product.deleteProduct')}
             </Button>
           </div>
         </Card>
@@ -777,32 +764,29 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         </div>
       </Modal>
 
-      <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject conversion">
+      <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title={t('product.rejectModal.title')}>
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Add a short reason so the merchant workflow keeps an audit trail.</p>
           <textarea
             rows={3}
             value={rejectReason}
             onChange={(event) => setRejectReason(event.target.value)}
             className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            placeholder="e.g. geometry distortion around the handle"
+            placeholder={t('product.rejectModal.placeholder')}
           />
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setRejectOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setRejectOpen(false)}>{t('common.cancel')}</Button>
             <Button variant="danger" onClick={handleReject} loading={busyAction === 'reject'} disabled={!rejectReason.trim()}>
-              Reject conversion
+              {t('product.rejectModal.confirmBtn')}
             </Button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete product">
-        <p className="text-sm text-gray-600">
-          This will permanently delete the product, its 3D model, and all interaction history. This cannot be undone.
-        </p>
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title={t('product.deleteProduct')}>
+        <p className="text-sm text-gray-600">{t('product.deleteModal.description')}</p>
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</Button>
-          <Button variant="danger" onClick={handleDelete} loading={deleting}>Delete</Button>
+          <Button variant="secondary" onClick={() => setDeleteOpen(false)} disabled={deleting}>{t('common.cancel')}</Button>
+          <Button variant="danger" onClick={handleDelete} loading={deleting}>{t('common.delete')}</Button>
         </div>
       </Modal>
 
@@ -813,20 +797,20 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             setTrendyolOpen(false);
           }
         }}
-        title="Publish to Trendyol"
+        title={t('product.trendyolModal.title')}
       >
         {trendyolPublish.phase === 'generating' && (
           <div className="flex flex-col items-center gap-3 py-8">
-            <Spinner size="lg" label="Gemini is analyzing your product and generating the listing…" />
-            <p className="text-sm text-gray-400 text-center">This takes about 10 seconds</p>
+            <Spinner size="lg" label={t('product.trendyolModal.generatingLabel')} />
+            <p className="text-sm text-gray-400 text-center">{t('product.trendyolModal.generatingTime')}</p>
           </div>
         )}
 
         {trendyolPublish.phase === 'reviewing' && trendyolPublish.draft && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-500">Gemini generated this listing. Review and edit before publishing.</p>
+            <p className="text-sm text-gray-500">{t('product.trendyolModal.reviewDesc')}</p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('product.trendyolModal.titleLabel')}</label>
               <input
                 type="text"
                 value={trendyolPublish.draft.title}
@@ -835,7 +819,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('product.trendyolModal.descriptionLabel')}</label>
               <textarea
                 rows={3}
                 value={trendyolPublish.draft.description}
@@ -845,7 +829,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">List price (TRY)</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t('product.trendyolModal.listPrice')}</label>
                 <input
                   type="number"
                   value={trendyolPublish.draft.listPrice}
@@ -854,7 +838,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Sale price (TRY)</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t('product.trendyolModal.salePrice')}</label>
                 <input
                   type="number"
                   value={trendyolPublish.draft.salePrice}
@@ -864,7 +848,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Brand</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('product.trendyolModal.brand')}</label>
               <input
                 type="text"
                 value={trendyolPublish.draft.brandName}
@@ -874,7 +858,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             </div>
             {trendyolPublish.draft.attributes.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-600 mb-2">AI-suggested attributes</p>
+                <p className="text-xs font-medium text-gray-600 mb-2">{t('product.trendyolModal.aiAttributes')}</p>
                 <div className="flex flex-wrap gap-2">
                   {trendyolPublish.draft.attributes.map((attr) => (
                     <span key={attr.name} className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">
@@ -882,11 +866,11 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                     </span>
                   ))}
                 </div>
-                <p className="mt-1 text-[10px] text-gray-400">AI-suggested, verify before publishing</p>
+                <p className="mt-1 text-[10px] text-gray-400">{t('product.trendyolModal.aiAttributesNote')}</p>
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" size="sm" onClick={() => setTrendyolOpen(false)}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => setTrendyolOpen(false)}>{t('product.trendyolModal.cancelBtn')}</Button>
               <Button
                 size="sm"
                 onClick={() => {
@@ -895,7 +879,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                   void trendyolPublish.publish(trendyolPublish.draft, conversion.sourceAssets[0].url, barcode);
                 }}
               >
-                Publish to Trendyol
+                {t('product.trendyolModal.publishBtn')}
               </Button>
             </div>
           </div>
@@ -903,9 +887,9 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
         {(trendyolPublish.phase === 'publishing' || trendyolPublish.phase === 'polling') && (
           <div className="flex flex-col items-center gap-3 py-8">
-            <Spinner size="lg" label={trendyolPublish.phase === 'publishing' ? 'Submitting to Trendyol…' : 'Waiting for Trendyol to process…'} />
+            <Spinner size="lg" label={trendyolPublish.phase === 'publishing' ? t('product.trendyolModal.submitting') : t('product.trendyolModal.polling')} />
             {trendyolPublish.batchRequestId && (
-              <p className="text-xs text-gray-400">Batch ID: {trendyolPublish.batchRequestId}</p>
+              <p className="text-xs text-gray-400">{t('product.trendyolModal.batchId')} {trendyolPublish.batchRequestId}</p>
             )}
           </div>
         )}
@@ -913,16 +897,16 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         {trendyolPublish.phase === 'done' && (
           <div className="space-y-4 py-4 text-center">
             <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${trendyolPublish.batchStatus === 'FAILED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-              {trendyolPublish.batchStatus === 'FAILED' ? 'Submission failed on Trendyol' : trendyolPublish.batchStatus === 'IN_PROGRESS' ? 'Processing (check Trendyol panel)' : 'Published successfully'}
+              {trendyolPublish.batchStatus === 'FAILED' ? t('product.trendyolModal.submittedFailed') : trendyolPublish.batchStatus === 'IN_PROGRESS' ? t('product.trendyolModal.submittedInProgress') : t('product.trendyolModal.submittedSuccess')}
             </div>
             <p className="text-sm text-gray-500">
               {trendyolPublish.batchStatus === 'DONE'
-                ? 'Your product is now live on Trendyol. It may take a few minutes to appear in search results.'
+                ? t('product.trendyolModal.doneSuccess')
                 : trendyolPublish.batchStatus === 'IN_PROGRESS'
-                  ? 'The listing is processing. Check the Trendyol Seller Center for status updates.'
-                  : 'The batch had errors. Check the Trendyol Seller Center for details.'}
+                  ? t('product.trendyolModal.doneInProgress')
+                  : t('product.trendyolModal.doneFailed')}
             </p>
-            <Button size="sm" onClick={() => setTrendyolOpen(false)}>Done</Button>
+            <Button size="sm" onClick={() => setTrendyolOpen(false)}>{t('product.trendyolModal.closeBtn')}</Button>
           </div>
         )}
 
@@ -930,7 +914,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           <div className="space-y-4">
             <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{trendyolPublish.error}</div>
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setTrendyolOpen(false)}>Close</Button>
+              <Button variant="secondary" size="sm" onClick={() => setTrendyolOpen(false)}>{t('product.trendyolModal.closeBtn')}</Button>
               <Button
                 size="sm"
                 onClick={() => {
@@ -938,16 +922,16 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                   void trendyolPublish.generateListing(product.id);
                 }}
               >
-                Retry
+                {t('product.trendyolModal.retryBtn')}
               </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      <Modal open={embedOpen} onClose={() => { setEmbedOpen(false); setCopied(false); }} title="Share / Embed">
+      <Modal open={embedOpen} onClose={() => { setEmbedOpen(false); setCopied(false); }} title={t('product.embedModal.title')}>
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Paste one of these snippets into any webpage to show the interactive 3D viewer.</p>
+          <p className="text-sm text-gray-500">{t('product.embedModal.description')}</p>
 
           <div className="flex gap-2">
             <Button size="sm" variant={embedType === 'iframe' ? 'primary' : 'secondary'} onClick={() => setEmbedType('iframe')}>
@@ -967,7 +951,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           </div>
 
           <div className="flex justify-between">
-            <span className="text-xs text-gray-400">{copied ? 'Copied to clipboard' : 'Ready to copy'}</span>
+            <span className="text-xs text-gray-400">{copied ? t('product.embedModal.copied') : t('product.embedModal.ready')}</span>
             <Button
               size="sm"
               onClick={() => copySnippet(
@@ -976,7 +960,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                   : buildModelViewerSnippet(conversion.outputAsset?.url ?? ''),
               )}
             >
-              Copy snippet
+              {t('product.embedModal.copyBtn')}
             </Button>
           </div>
         </div>
