@@ -12,6 +12,7 @@ function makeModel(responseText: string) {
 function makePrimitive(): VisualQaInput['generatedPrimitive'] {
   return {
     shape: 'box',
+    detectedType: 'other',
     widthM: 0.3,
     heightM: 0.4,
     depthM: 0.2,

@@ -19,6 +19,7 @@ export interface GeneratedPrimitivePart {
 
 export interface GeneratedPrimitive {
   shape: 'box' | 'cylinder' | 'sphere' | 'compound';
+  detectedType: string;
   widthM: number;
   heightM: number;
   depthM: number;

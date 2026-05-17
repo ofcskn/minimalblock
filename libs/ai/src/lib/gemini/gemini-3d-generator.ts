@@ -1,12 +1,16 @@
 import { IModelGeneratorPort, GenerateModelInput, GenerateModelOutput, MediaAsset } from '@minimalblock/core';
 import type { GenerativeModel } from '@google/generative-ai';
-import { buildConvert2DTo3DPrompt } from '../prompts/convert-2d-to-3d.prompt.js';
+import { buildConvert2DTo3DPrompt, DETECTED_PRODUCT_TYPES, type DetectedProductType } from '../prompts/convert-2d-to-3d.prompt.js';
 import type { QualityHint } from '../types/ai-request.types.js';
-import { buildGlbFromShape, buildCompoundGlb, buildCategoryParts, type ShapeParams } from './glb-builder.js';
-// Re-export for convenience so callers can import from this module
+import { buildGlbFromShape, buildCompoundGlb, buildProductTypeParts, type ShapeParams } from './glb-builder.js';
+
 export type { ShapeParams };
 
-function parseShapeParams(raw: string): ShapeParams {
+interface ParsedShapeResponse extends ShapeParams {
+  detectedType: DetectedProductType;
+}
+
+function parseShapeParams(raw: string): ParsedShapeResponse {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
   let parsed: unknown;
   try {
@@ -21,13 +25,19 @@ function parseShapeParams(raw: string): ShapeParams {
   }
 
   const p = parsed as Record<string, unknown>;
-  const shape = p['shape'] as string;
-  if (shape !== 'box' && shape !== 'cylinder' && shape !== 'sphere') {
-    throw new Error(`Gemini returned invalid shape: "${shape}"`);
+
+  const rawShape = p['shape'] as string;
+  if (rawShape !== 'box' && rawShape !== 'cylinder' && rawShape !== 'sphere') {
+    throw new Error(`Gemini returned invalid shape: "${rawShape}"`);
   }
 
+  const rawType = p['detectedType'] as string;
+  const detectedType: DetectedProductType =
+    DETECTED_PRODUCT_TYPES.includes(rawType as DetectedProductType) ? (rawType as DetectedProductType) : 'other';
+
   return {
-    shape: shape as 'box' | 'cylinder' | 'sphere',
+    detectedType,
+    shape: rawShape,
     width:    typeof p['width']    === 'number' ? p['width']    : 0.3,
     height:   typeof p['height']   === 'number' ? p['height']   : 0.3,
     depth:    typeof p['depth']    === 'number' ? p['depth']    : 0.3,
@@ -57,20 +67,16 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
 
     const result = await this.model.generateContent([
       { text: prompt },
-      {
-        inlineData: {
-          mimeType: input.sourceAsset.mimeType as string,
-          data: imageBase64,
-        },
-      },
+      { inlineData: { mimeType: input.sourceAsset.mimeType as string, data: imageBase64 } },
     ]);
 
     const tokensUsed = result.response.usageMetadata?.totalTokenCount ?? 0;
     const raw = result.response.text().trim();
-    const shapeParams = parseShapeParams(raw);
+    const parsed = parseShapeParams(raw);
+    const { detectedType, ...shapeParams } = parsed;
 
-    // Build category-appropriate compound or single-primitive shape
-    const parts = buildCategoryParts(input.productCategory, shapeParams);
+    // Build compound mesh matching the visually detected product type
+    const parts = buildProductTypeParts(detectedType, shapeParams);
     const isCompound = parts.length > 1;
     const glb = isCompound ? buildCompoundGlb(parts) : buildGlbFromShape(shapeParams);
 
@@ -78,10 +84,9 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
     for (let i = 0; i < glb.byteLength; i += 1) {
       glbBinary += String.fromCharCode(glb[i]);
     }
-    const glbBase64 = btoa(glbBinary);
 
     const outputAsset = new MediaAsset({
-      url: `data:model/gltf-binary;base64,${glbBase64}`,
+      url: `data:model/gltf-binary;base64,${btoa(glbBinary)}`,
       storageKey: '',
       mimeType: 'model/gltf-binary',
       kind: 'generated-model',
@@ -91,17 +96,18 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
     const generatedPrimitive = isCompound
       ? {
           shape: 'compound' as const,
-          widthM: shapeParams.width,
-          heightM: shapeParams.height,
-          depthM: shapeParams.depth,
+          detectedType,
+          widthM:    shapeParams.width,
+          heightM:   shapeParams.height,
+          depthM:    shapeParams.depth,
           baseColor: shapeParams.baseColor,
           roughness: shapeParams.roughness,
           metalness: shapeParams.metalness,
           parts: parts.map((part) => ({
-            shape: part.shape,
-            widthM: part.width,
-            heightM: part.height,
-            depthM: part.depth,
+            shape:     part.shape,
+            widthM:    part.width,
+            heightM:   part.height,
+            depthM:    part.depth,
             baseColor: part.baseColor,
             roughness: part.roughness,
             metalness: part.metalness,
@@ -109,19 +115,16 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
           })),
         }
       : {
-          shape: shapeParams.shape,
-          widthM: shapeParams.width,
-          heightM: shapeParams.height,
-          depthM: shapeParams.depth,
+          shape:     shapeParams.shape,
+          detectedType,
+          widthM:    shapeParams.width,
+          heightM:   shapeParams.height,
+          depthM:    shapeParams.depth,
           baseColor: shapeParams.baseColor,
           roughness: shapeParams.roughness,
           metalness: shapeParams.metalness,
         };
 
-    return {
-      outputAsset,
-      tokensUsed,
-      generatedPrimitive,
-    };
+    return { outputAsset, tokensUsed, generatedPrimitive };
   }
 }

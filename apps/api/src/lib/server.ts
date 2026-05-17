@@ -625,6 +625,7 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
       const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
       const genericPrimitive = {
         shape: 'box' as const,
+        detectedType: 'other',
         widthM: 0.3,
         heightM: 0.3,
         depthM: 0.3,

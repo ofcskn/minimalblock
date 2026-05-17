@@ -16,7 +16,6 @@ function describeMesh(primitive: GeneratedPrimitive): string {
       .join('; ');
     return `a compound mesh with ${primitive.parts.length} parts — ${partList}`;
   }
-
   if (primitive.shape === 'sphere') {
     return `a sphere with diameter ${primitive.widthM.toFixed(2)} m`;
   }
@@ -29,10 +28,10 @@ function describeMesh(primitive: GeneratedPrimitive): string {
 function scoringGuide(isCompound: boolean): string {
   if (isCompound) {
     return [
-      '- 90-100: compound mesh closely represents the product structure (e.g. laptop screen + base for a laptop)',
-      '- 70-89: compound mesh is a good structural approximation of the product',
-      '- 40-69: partial match — some structural aspects are lost',
-      '- 0-39: poor match — compound structure does not represent the product',
+      '- 90-100: compound mesh closely represents the product structure (e.g. screen+base for a laptop)',
+      '- 70-89: compound mesh is a good structural approximation',
+      '- 40-69: partial match — some structural features are missing or wrong',
+      '- 0-39: poor match — structure does not represent the product type',
     ].join('\n');
   }
   return [
@@ -49,12 +48,20 @@ export function buildVisualQaPrompt(productCategory: string, primitive: Generate
   const materialDescription = `roughness ${primitive.roughness.toFixed(2)}, metalness ${primitive.metalness.toFixed(2)}, base colour rgb(${r},${g},${b})`;
   const meshDescription = describeMesh(primitive);
 
+  // Prefer the AI-detected product type for scoring; fall back to merchant category.
+  // This prevents scoring a correct laptop model as "wrong" just because the merchant
+  // labelled it as "furniture".
+  const productLabel = primitive.detectedType && primitive.detectedType !== 'other'
+    ? `${primitive.detectedType} (merchant category: ${productCategory})`
+    : productCategory;
+
   return (
     `You are a 3D commerce asset quality evaluator.\n\n` +
     `TASK\n` +
-    `The source product images show a "${productCategory}" product. ` +
+    `The source product images show a ${productLabel}. ` +
     `A 3D generation pipeline converted those images into ${meshDescription}, ${materialDescription}.\n\n` +
     `Evaluate whether this mesh is an acceptable 3D/AR representation of the product shown in the images for an e-commerce product page.\n\n` +
+    `IMPORTANT: judge the mesh against the ACTUAL product visible in the images, not the merchant category label.\n\n` +
     `SCORING GUIDE\n` +
     `${scoringGuide(isCompound)}\n\n` +
     `Respond with ONLY a raw JSON object — no markdown, no code fences:\n` +
