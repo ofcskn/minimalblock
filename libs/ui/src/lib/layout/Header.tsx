@@ -1085,8 +1085,6 @@ export function Header({
           />
         ) : null}
       </div>
-
-      <div className={cn('pointer-events-none absolute inset-x-0 top-full h-6 bg-gradient-to-b to-transparent', themeClasses.overlay)} />
     </HeaderRoot>
   );
 }
