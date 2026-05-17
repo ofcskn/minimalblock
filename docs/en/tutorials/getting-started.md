@@ -40,7 +40,7 @@ Create both accounts before proceeding.
 ```bash
 git clone https://github.com/ofcskn/minimalblock.git
 cd minimalblock
-npm install
+pnpm install
 ```
 
 ---
@@ -80,9 +80,9 @@ No other variables are required to run the app locally.
 Start the web app:
 
 ```bash
-npm run dev
+pnpm dev
 # or via Nx:
-npx nx serve web
+pnpm nx serve web
 ```
 
 The app opens at `http://localhost:4200` by default.
@@ -90,9 +90,9 @@ The app opens at `http://localhost:4200` by default.
 Start the docs site:
 
 ```bash
-npm run docs:dev
+pnpm docs:dev
 # or via Nx:
-npx nx serve docs
+pnpm nx serve docs
 ```
 
 The docs open at `http://localhost:5173`.

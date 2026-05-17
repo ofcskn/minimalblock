@@ -17,10 +17,10 @@ description: model-viewer web bileşenini yükleyin, ModelViewer'ı yapılandır
 </script>
 ```
 
-Alternatif olarak npm paketini yükleyip `main.tsx` dosyasında içe aktarın:
+Alternatif olarak paketi yükleyip `main.tsx` dosyasında içe aktarın:
 
 ```bash
-npm install @google/model-viewer
+pnpm add @google/model-viewer
 ```
 
 ```ts

@@ -15,7 +15,7 @@
     }
   },
   "dependencies": {
-    "@minimalblock/core": "0.0.1",
+    "@minimalblock/core": "workspace:*",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "tslib": "^2.3.0"

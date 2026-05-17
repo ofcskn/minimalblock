@@ -8,6 +8,7 @@
     "docs:preview": "vitepress preview apps/docs/src"
   },
   "private": true,
+  "packageManager": "pnpm@10.30.3",
   "devDependencies": {
     "@eslint/js": "^9.8.0",
     "@nx/esbuild": "22.7.2",
@@ -71,15 +72,6 @@
     "vitest": "~4.1.0",
     "vue-tsc": "^2.2.8"
   },
-  "workspaces": [
-    "packages/*",
-    "apps/*",
-    "libs/features",
-    "libs/core",
-    "libs/data",
-    "libs/ui",
-    "libs/ai"
-  ],
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.105.4",

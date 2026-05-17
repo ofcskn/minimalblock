@@ -40,7 +40,7 @@ Devam etmeden önce her iki hesabı da oluşturun.
 ```bash
 git clone https://github.com/ofcskn/minimalblock.git
 cd minimalblock
-npm install
+pnpm install
 ```
 
 ---
@@ -80,9 +80,9 @@ Uygulamayı yerel ortamda çalıştırmak için başka bir değişken gerekli de
 Web uygulamasını başlatın:
 
 ```bash
-npm run dev
+pnpm dev
 # veya Nx aracılığıyla:
-npx nx serve web
+pnpm nx serve web
 ```
 
 Uygulama varsayılan olarak `http://localhost:4200` adresinde açılır.
@@ -90,9 +90,9 @@ Uygulama varsayılan olarak `http://localhost:4200` adresinde açılır.
 Belge sitesini başlatın:
 
 ```bash
-npm run docs:dev
+pnpm docs:dev
 # veya Nx aracılığıyla:
-npx nx serve docs
+pnpm nx serve docs
 ```
 
 Belgeler `http://localhost:5173` adresinde açılır.

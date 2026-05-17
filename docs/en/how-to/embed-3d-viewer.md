@@ -17,10 +17,10 @@ Add the following to `apps/web/index.html` or import it once at the app entry po
 </script>
 ```
 
-Alternatively, install the npm package and import it in `main.tsx`:
+Alternatively, install the package and import it in `main.tsx`:
 
 ```bash
-npm install @google/model-viewer
+pnpm add @google/model-viewer
 ```
 
 ```ts
