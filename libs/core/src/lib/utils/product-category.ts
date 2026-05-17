@@ -5,6 +5,7 @@ export const PRODUCT_CATEGORIES: readonly ProductCategory[] = [
   'home-decor',
   'bags',
   'accessories',
+  'electronics',
   'other',
 ];
 
@@ -18,7 +19,9 @@ export function migrateLegacyProductCategory(value: string): ProductCategory {
       return 'home-decor';
     case 'furniture':
       return 'furniture';
+    case 'electronics':
     case 'appliance':
+      return 'electronics';
     case 'vehicle':
     case 'other':
     default:

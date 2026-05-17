@@ -37,7 +37,7 @@ export function buildImageAnalysisPrompt(): string {
   return `Analyse this product image and respond in JSON with:
 {
   "description": "brief one-sentence description of the object",
-  "suggestedCategory": "one of: furniture | home-decor | bags | accessories | other"
+  "suggestedCategory": "one of: furniture | home-decor | bags | accessories | electronics | other"
 }
 Respond with ONLY the JSON object.`;
 }

@@ -130,8 +130,8 @@ export class Conversion {
     });
   }
 
-  markFailed(reason: string): Conversion {
-    return this.clone({ status: ConversionStatus.failed(), errorMessage: reason });
+  markFailed(reason: string, qualityReport?: QualityReport): Conversion {
+    return this.clone({ status: ConversionStatus.failed(), errorMessage: reason, qualityReport });
   }
 
   isAccessibleBy(userId: string): boolean {

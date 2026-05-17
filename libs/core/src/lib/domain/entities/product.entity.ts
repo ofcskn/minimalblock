@@ -1,6 +1,6 @@
 import { generateId } from '../../utils/id-generator.js';
 
-export type ProductCategory = 'furniture' | 'home-decor' | 'bags' | 'accessories' | 'other';
+export type ProductCategory = 'furniture' | 'home-decor' | 'bags' | 'accessories' | 'electronics' | 'other';
 export type SuggestedHotspotType = 'material' | 'dimension' | 'feature' | 'warning' | 'assembly';
 export type SuggestedHotspotStatus = 'pending' | 'accepted' | 'rejected';
 
