@@ -6,6 +6,7 @@ import { GalleryPage } from '../pages/GalleryPage.js';
 import { UploadPage } from '../pages/UploadPage.js';
 import { ProductDetailPage } from '../pages/ProductDetailPage.js';
 import { PublicProductPage } from '../pages/PublicProductPage.js';
+import { BrandPage } from '../pages/BrandPage.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { AppProvider, useApp } from '../context/AppContext.js';
 import { AppChrome } from './AppChrome.js';
@@ -33,6 +34,7 @@ function AppRoutes() {
         <Route path="/" element={<GalleryPage user={user} />} />
         <Route path="/upload" element={<UploadPage user={user} />} />
         <Route path="/product/:id" element={<ProductDetailPage user={user} />} />
+        <Route path="/brand" element={<BrandPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppChrome>
