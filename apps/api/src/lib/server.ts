@@ -39,7 +39,15 @@ import {
 } from '@minimalblock/data';
 import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa, buildTrendyolListingPrompt } from '@minimalblock/ai';
 import { TrendyolClient } from '@minimalblock/trendyol';
-import type { TrendyolProduct, TrendyolProductDraft } from '@minimalblock/trendyol';
+import type {
+  BatchResult as TrendyolBatchResult,
+  ShipmentPackagesParams,
+  TrendyolBuyboxResult,
+  TrendyolPackage,
+  TrendyolProduct,
+  TrendyolProductDraft,
+  TrendyolUnapprovedProduct,
+} from '@minimalblock/trendyol';
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import type { Database } from '@minimalblock/data';
 
@@ -746,7 +754,7 @@ async function handleTrendyolCreateProducts(
 async function handleTrendyolPollBatch(
   ctx: RequestContext,
   batchRequestId: string,
-): Promise<{ batch: import('@minimalblock/trendyol').BatchResult }> {
+): Promise<{ batch: TrendyolBatchResult }> {
   const client = createTrendyolClient(ctx.env);
   const batch = await client.pollBatchResult(batchRequestId);
   return { batch };
@@ -755,7 +763,7 @@ async function handleTrendyolPollBatch(
 async function handleTrendyolUnapproved(
   ctx: RequestContext,
   page: number,
-): Promise<{ content: import('@minimalblock/trendyol').TrendyolUnapprovedProduct[]; totalElements: number }> {
+): Promise<{ content: TrendyolUnapprovedProduct[]; totalElements: number }> {
   const client = createTrendyolClient(ctx.env);
   return client.filterUnapprovedProducts({ page, size: 20 });
 }
@@ -763,7 +771,7 @@ async function handleTrendyolUnapproved(
 async function handleTrendyolBuybox(
   ctx: RequestContext,
   req: { barcodes: string[] },
-): Promise<{ result: import('@minimalblock/trendyol').TrendyolBuyboxResult[] }> {
+): Promise<{ result: TrendyolBuyboxResult[] }> {
   if (!req.barcodes?.length) throw new Error('Invalid request');
   const client = createTrendyolClient(ctx.env);
   return client.getBuyboxInformation(req.barcodes.slice(0, 10));
@@ -773,8 +781,8 @@ async function handleTrendyolBuybox(
 
 async function handleTrendyolOrders(
   ctx: RequestContext,
-  params: import('@minimalblock/trendyol').ShipmentPackagesParams,
-): Promise<{ content: import('@minimalblock/trendyol').TrendyolPackage[]; totalPages: number; totalElements: number }> {
+  params: ShipmentPackagesParams,
+): Promise<{ content: TrendyolPackage[]; totalPages: number; totalElements: number }> {
   const client = createTrendyolClient(ctx.env);
   return client.getShipmentPackages(params);
 }
@@ -905,7 +913,7 @@ export function createApiServer(env = getEnv()) {
 
       // --- Trendyol: orders ---
       if (req.method === 'GET' && pathname === '/api/trendyol/orders') {
-        const params: import('@minimalblock/trendyol').ShipmentPackagesParams = {
+        const params: ShipmentPackagesParams = {
           page: Number(url.searchParams.get('page') ?? '0'),
           size: Number(url.searchParams.get('size') ?? '50'),
           status: url.searchParams.get('status') ?? undefined,
