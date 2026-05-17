@@ -68,7 +68,7 @@ export class TrendyolClient {
       headers: {
         'Content-Type': 'application/json',
         Authorization: this.authHeader,
-        'User-Agent': 'minimalblock-seller-api',
+        'User-Agent': `${this.env.sellerId} - minimalblock`,
         ...(init?.headers ?? {}),
       },
     });
