@@ -12,6 +12,8 @@ export type { VisualQaInput } from './lib/gemini/gemini-visual-qa.js';
 export { buildConvert2DTo3DPrompt, buildImageAnalysisPrompt } from './lib/prompts/convert-2d-to-3d.prompt.js';
 export { buildReturnRiskPrompt } from './lib/prompts/return-risk-analysis.prompt.js';
 export { buildVisualQaPrompt } from './lib/prompts/visual-qa.prompt.js';
+export { buildTrendyolListingPrompt } from './lib/prompts/trendyol-listing.js';
+export type { TrendyolListingInput } from './lib/prompts/trendyol-listing.js';
 
 // Types
 export type { Convert2DTo3DRequest, AnalyzeImageRequest, QualityHint } from './lib/types/ai-request.types.js';

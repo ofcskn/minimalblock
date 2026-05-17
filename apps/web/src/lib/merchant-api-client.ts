@@ -11,6 +11,49 @@ import type {
 } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+export interface TrendyolProductDraft {
+  title: string;
+  description: string;
+  categoryId: number;
+  brandName: string;
+  listPrice: number;
+  salePrice: number;
+  attributes: Array<{ name: string; value: string }>;
+}
+
+export interface TrendyolPackage {
+  shipmentPackageId: number;
+  shipmentPackageStatus: string;
+  orderNumber: string;
+  orderDate: number;
+  grossAmount: number;
+  currencyCode: string;
+  lines: Array<{
+    lineId: number;
+    quantity: number;
+    amount: number;
+    merchantSku: string;
+    product: { id: number; barcode: string; title: string; category: { name: string }; brand: { name: string }; images: Array<{ url: string }> };
+  }>;
+  shipmentAddress?: { fullName: string; city: string; district: string };
+  cargo?: { providerName: string; trackingNumber?: string };
+}
+
+export interface TrendyolBuyboxResult {
+  barcode: string;
+  buyBoxPrice?: number;
+  buyBoxSellerCount?: number;
+  isCurrentSellerWinner?: boolean;
+}
+
+export interface BatchResult {
+  batchRequestId: string;
+  status: 'IN_PROGRESS' | 'DONE' | 'FAILED';
+  itemCount: number;
+  failedItemCount: number;
+  items: Array<{ status: 'SUCCESS' | 'ERROR'; failureReasons?: string[] }>;
+}
+
 export class MerchantApiClient {
   constructor(
     private readonly baseUrl: string,
@@ -99,5 +142,59 @@ export class MerchantApiClient {
       method: 'POST',
       body: JSON.stringify({ productId }),
     });
+  }
+
+  // --- Trendyol ---
+
+  generateTrendyolListing(productId: string): Promise<{ draft: TrendyolProductDraft }> {
+    return this.request<{ draft: TrendyolProductDraft }>('/api/ai/trendyol-listing', {
+      method: 'POST',
+      body: JSON.stringify({ productId }),
+    });
+  }
+
+  createTrendyolProducts(items: unknown[]): Promise<{ batchRequestId: string }> {
+    return this.request<{ batchRequestId: string }>('/api/trendyol/products', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  pollTrendyolBatch(batchRequestId: string): Promise<{ batch: BatchResult }> {
+    return this.request<{ batch: BatchResult }>(`/api/trendyol/products/batch/${batchRequestId}`);
+  }
+
+  getTrendyolOrders(params?: { page?: number; size?: number; status?: string }): Promise<{
+    content: TrendyolPackage[];
+    totalPages: number;
+    totalElements: number;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.page !== undefined) qs.set('page', String(params.page));
+    if (params?.size !== undefined) qs.set('size', String(params.size));
+    if (params?.status) qs.set('status', params.status);
+    return this.request(`/api/trendyol/orders?${qs}`);
+  }
+
+  updateTrendyolOrderStatus(
+    packageId: number | string,
+    status: 'Picking' | 'Invoiced',
+    invoiceNumber?: string,
+  ): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>(`/api/trendyol/orders/${packageId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, invoiceNumber }),
+    });
+  }
+
+  getTrendyolBuybox(barcodes: string[]): Promise<{ result: TrendyolBuyboxResult[] }> {
+    return this.request<{ result: TrendyolBuyboxResult[] }>('/api/trendyol/buybox', {
+      method: 'POST',
+      body: JSON.stringify({ barcodes }),
+    });
+  }
+
+  getTrendyolUnapproved(page = 0): Promise<{ content: unknown[]; totalElements: number }> {
+    return this.request(`/api/trendyol/unapproved?page=${page}`);
   }
 }

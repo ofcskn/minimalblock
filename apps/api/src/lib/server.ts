@@ -37,7 +37,9 @@ import {
   SupabaseGenerationJobRepository,
   SupabaseProductRepository,
 } from '@minimalblock/data';
-import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa } from '@minimalblock/ai';
+import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa, buildTrendyolListingPrompt } from '@minimalblock/ai';
+import { TrendyolClient } from '@minimalblock/trendyol';
+import type { TrendyolProduct, TrendyolProductDraft } from '@minimalblock/trendyol';
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import type { Database } from '@minimalblock/data';
 
@@ -47,6 +49,10 @@ export interface ApiEnv {
   geminiApiKey: string;
   port: number;
   corsOrigin: string;
+  trendyolSellerId: string;
+  trendyolApiKey: string;
+  trendyolApiSecret: string;
+  trendyolMock: boolean;
 }
 
 interface RequestContext {
@@ -72,6 +78,10 @@ function getEnv(): ApiEnv {
     geminiApiKey,
     port: Number(process.env['API_PORT'] ?? 8787),
     corsOrigin: process.env['CORS_ORIGIN'] ?? '*',
+    trendyolSellerId: process.env['TRENDYOL_SELLER_ID'] ?? '',
+    trendyolApiKey: process.env['TRENDYOL_API_KEY'] ?? '',
+    trendyolApiSecret: process.env['TRENDYOL_API_SECRET'] ?? '',
+    trendyolMock: process.env['TRENDYOL_MOCK'] === 'true' || !process.env['TRENDYOL_SELLER_ID'],
   };
 }
 
@@ -94,7 +104,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown, origin: st
   res.writeHead(status, {
     ...JSON_HEADERS,
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type',
   });
   res.end(JSON.stringify(body));
@@ -103,7 +113,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown, origin: st
 function sendNoContent(res: ServerResponse, origin: string): void {
   res.writeHead(204, {
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type',
   });
   res.end();
@@ -669,6 +679,117 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
   };
 }
 
+// --- Trendyol helpers ---
+
+function createTrendyolClient(env: ApiEnv): TrendyolClient {
+  return new TrendyolClient({
+    sellerId: env.trendyolSellerId,
+    apiKey: env.trendyolApiKey,
+    apiSecret: env.trendyolApiSecret,
+    mock: env.trendyolMock,
+  });
+}
+
+// --- Trendyol: Gemini listing generation ---
+
+async function handleTrendyolListing(
+  ctx: RequestContext,
+  req: { productId: string },
+): Promise<{ draft: TrendyolProductDraft }> {
+  const product = await getOwnedProduct(ctx, req.productId);
+  const conversion = await getLatestConversionForProduct(ctx, product.id);
+
+  const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+    { text: buildTrendyolListingPrompt({ productName: product.name, productCategory: product.category }) },
+  ];
+
+  if (conversion?.sourceAssets[0]) {
+    parts.push({ inlineData: await fetchAssetBase64(conversion.sourceAssets[0]) });
+  }
+
+  const result = await model.generateContent(parts);
+  const raw = parseJsonText<{
+    title?: string;
+    description?: string;
+    categoryId?: number;
+    brandName?: string;
+    listPrice?: number;
+    salePrice?: number;
+    attributes?: Array<{ name: string; value: string }>;
+  }>(result.response.text());
+
+  const draft: TrendyolProductDraft = {
+    title: raw.title ?? product.name,
+    description: raw.description ?? product.description ?? '',
+    categoryId: raw.categoryId ?? 2356,
+    brandName: raw.brandName ?? 'Generic',
+    listPrice: raw.listPrice ?? 299,
+    salePrice: raw.salePrice ?? 249,
+    attributes: raw.attributes ?? [],
+  };
+
+  return { draft };
+}
+
+// --- Trendyol: product catalog ---
+
+async function handleTrendyolCreateProducts(
+  ctx: RequestContext,
+  req: { items: TrendyolProduct[] },
+): Promise<{ batchRequestId: string }> {
+  if (!req.items?.length) throw new Error('Invalid request');
+  const client = createTrendyolClient(ctx.env);
+  return client.createProducts(req.items);
+}
+
+async function handleTrendyolPollBatch(
+  ctx: RequestContext,
+  batchRequestId: string,
+): Promise<{ batch: import('@minimalblock/trendyol').BatchResult }> {
+  const client = createTrendyolClient(ctx.env);
+  const batch = await client.pollBatchResult(batchRequestId);
+  return { batch };
+}
+
+async function handleTrendyolUnapproved(
+  ctx: RequestContext,
+  page: number,
+): Promise<{ content: import('@minimalblock/trendyol').TrendyolUnapprovedProduct[]; totalElements: number }> {
+  const client = createTrendyolClient(ctx.env);
+  return client.filterUnapprovedProducts({ page, size: 20 });
+}
+
+async function handleTrendyolBuybox(
+  ctx: RequestContext,
+  req: { barcodes: string[] },
+): Promise<{ result: import('@minimalblock/trendyol').TrendyolBuyboxResult[] }> {
+  if (!req.barcodes?.length) throw new Error('Invalid request');
+  const client = createTrendyolClient(ctx.env);
+  return client.getBuyboxInformation(req.barcodes.slice(0, 10));
+}
+
+// --- Trendyol: orders ---
+
+async function handleTrendyolOrders(
+  ctx: RequestContext,
+  params: import('@minimalblock/trendyol').ShipmentPackagesParams,
+): Promise<{ content: import('@minimalblock/trendyol').TrendyolPackage[]; totalPages: number; totalElements: number }> {
+  const client = createTrendyolClient(ctx.env);
+  return client.getShipmentPackages(params);
+}
+
+async function handleTrendyolUpdateOrderStatus(
+  ctx: RequestContext,
+  packageId: string,
+  req: { status: 'Picking' | 'Invoiced'; invoiceNumber?: string },
+): Promise<{ ok: true }> {
+  if (!req.status) throw new Error('Invalid request');
+  const client = createTrendyolClient(ctx.env);
+  await client.updatePackageStatus(packageId, req.status, req.invoiceNumber);
+  return { ok: true };
+}
+
 function notFound(): never {
   throw new Error('Not found');
 }
@@ -747,6 +868,56 @@ export function createApiServer(env = getEnv()) {
       if (req.method === 'POST' && pathname === '/api/ai/quality-check') {
         const body = await readJson<QualityCheckRequest>(req);
         sendJson(res, 200, await handleQualityCheck(ctx, body), env.corsOrigin);
+        return;
+      }
+
+      // --- Trendyol: AI listing ---
+      if (req.method === 'POST' && pathname === '/api/ai/trendyol-listing') {
+        const body = await readJson<{ productId: string }>(req);
+        sendJson(res, 200, await handleTrendyolListing(ctx, body), env.corsOrigin);
+        return;
+      }
+
+      // --- Trendyol: products ---
+      if (req.method === 'POST' && pathname === '/api/trendyol/products') {
+        const body = await readJson<{ items: TrendyolProduct[] }>(req);
+        sendJson(res, 200, await handleTrendyolCreateProducts(ctx, body), env.corsOrigin);
+        return;
+      }
+
+      const batchMatch = pathname.match(/^\/api\/trendyol\/products\/batch\/([^/]+)$/);
+      if (req.method === 'GET' && batchMatch) {
+        sendJson(res, 200, await handleTrendyolPollBatch(ctx, batchMatch[1]), env.corsOrigin);
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/trendyol/unapproved') {
+        const page = Number(url.searchParams.get('page') ?? '0');
+        sendJson(res, 200, await handleTrendyolUnapproved(ctx, page), env.corsOrigin);
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/trendyol/buybox') {
+        const body = await readJson<{ barcodes: string[] }>(req);
+        sendJson(res, 200, await handleTrendyolBuybox(ctx, body), env.corsOrigin);
+        return;
+      }
+
+      // --- Trendyol: orders ---
+      if (req.method === 'GET' && pathname === '/api/trendyol/orders') {
+        const params: import('@minimalblock/trendyol').ShipmentPackagesParams = {
+          page: Number(url.searchParams.get('page') ?? '0'),
+          size: Number(url.searchParams.get('size') ?? '50'),
+          status: url.searchParams.get('status') ?? undefined,
+        };
+        sendJson(res, 200, await handleTrendyolOrders(ctx, params), env.corsOrigin);
+        return;
+      }
+
+      const orderStatusMatch = pathname.match(/^\/api\/trendyol\/orders\/([^/]+)\/status$/);
+      if (req.method === 'PUT' && orderStatusMatch) {
+        const body = await readJson<{ status: 'Picking' | 'Invoiced'; invoiceNumber?: string }>(req);
+        sendJson(res, 200, await handleTrendyolUpdateOrderStatus(ctx, orderStatusMatch[1], body), env.corsOrigin);
         return;
       }
 

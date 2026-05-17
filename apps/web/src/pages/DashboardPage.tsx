@@ -4,6 +4,7 @@ import type { ProductStats, HotspotStat, EmbedDomainStat } from '@minimalblock/d
 import { Card, Spinner, Button } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
+import type { TrendyolPackage } from '../lib/merchant-api-client.js';
 
 interface DashboardPageProps {
   user: SupabaseUser;
@@ -59,7 +60,7 @@ function downloadCsv(stats: ProductStats[], names: Record<string, string>) {
 
 export function DashboardPage({ user }: DashboardPageProps) {
   const navigate = useNavigate();
-  const { eventsRepo, productRepo, embedViewsRepo } = useApp();
+  const { eventsRepo, productRepo, embedViewsRepo, apiClient } = useApp();
 
   const [stats, setStats] = useState<ProductStats[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -67,6 +68,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
   const [embedDomains, setEmbedDomains] = useState<EmbedDomainStat[]>([]);
   const [avgSessions, setAvgSessions] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [trendyolOrders, setTrendyolOrders] = useState<TrendyolPackage[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -75,7 +77,8 @@ export function DashboardPage({ user }: DashboardPageProps) {
       eventsRepo.getHotspotStatsForOwner(user.id),
       embedViewsRepo.getDomainsForOwner(user.id),
       eventsRepo.getAvgSessionDuration(user.id),
-    ]).then(([s, products, hStats, domains, sessions]) => {
+      apiClient.getTrendyolOrders({ page: 0, size: 10 }).catch(() => ({ content: [], totalPages: 0, totalElements: 0 })),
+    ]).then(([s, products, hStats, domains, sessions, orders]) => {
       setStats(s.sort((a, b) => b.total - a.total));
       const nameMap: Record<string, string> = {};
       for (const p of products) nameMap[p.id] = p.name;
@@ -83,6 +86,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
       setHotspotStats(hStats);
       setEmbedDomains(domains);
       setAvgSessions(sessions);
+      setTrendyolOrders(orders.content);
     }).finally(() => setLoading(false));
   }, [eventsRepo, productRepo, embedViewsRepo, user.id]);
 
@@ -103,31 +107,69 @@ export function DashboardPage({ user }: DashboardPageProps) {
         <div className="flex h-40 items-center justify-center">
           <Spinner size="lg" label="Loading stats…" />
         </div>
-      ) : stats.length === 0 ? (
-        <Card>
-          <div className="py-10 text-center text-gray-400">
-            <p className="text-sm">No interaction data yet.</p>
-            <p className="text-xs mt-1">Start viewing your 3D products to generate analytics.</p>
-          </div>
-        </Card>
       ) : (
         <>
-          {/* Overview card */}
+          {/* Trendyol summary — always visible */}
           <Card>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-700">Total interactions</h2>
-              <span className="text-2xl font-bold text-indigo-600">{totalEvents}</span>
+              <h2 className="text-sm font-semibold text-gray-700">Trendyol</h2>
+              <Button variant="secondary" size="sm" onClick={() => navigate('/orders')}>
+                View orders
+              </Button>
             </div>
-            <div className="flex flex-wrap gap-3">
-              {Object.keys(EVENT_LABELS).map(type => {
-                const count = stats.reduce((s, p) => s + (p.counts[type as keyof typeof p.counts] ?? 0), 0);
-                return <StatPill key={type} label={EVENT_LABELS[type]} value={count} />;
-              })}
-            </div>
+            {trendyolOrders.length === 0 ? (
+              <p className="text-sm text-gray-400">No orders yet. Publish your first product to Trendyol to see orders here.</p>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col items-center rounded-lg bg-gray-50 px-4 py-3 text-center min-w-[80px]">
+                  <span className="text-2xl font-bold text-indigo-600">{trendyolOrders.length}</span>
+                  <span className="text-xs text-gray-500 mt-0.5">Recent orders</span>
+                </div>
+                <div className="flex flex-col items-center rounded-lg bg-gray-50 px-4 py-3 text-center min-w-[80px]">
+                  <span className="text-2xl font-bold text-indigo-600">
+                    {trendyolOrders.filter((o) => o.shipmentPackageStatus === 'Created').length}
+                  </span>
+                  <span className="text-xs text-gray-500 mt-0.5">New</span>
+                </div>
+                <div className="flex flex-col items-center rounded-lg bg-gray-50 px-4 py-3 text-center min-w-[80px]">
+                  <span className="text-2xl font-bold text-green-600">
+                    {trendyolOrders
+                      .reduce((sum, o) => sum + o.grossAmount, 0)
+                      .toLocaleString('tr-TR')}
+                  </span>
+                  <span className="text-xs text-gray-500 mt-0.5">Revenue (TRY)</span>
+                </div>
+              </div>
+            )}
           </Card>
 
-          {/* Embed domain breakdown */}
-          {embedDomains.length > 0 && (
+          {/* Analytics section */}
+          {stats.length === 0 ? (
+            <Card>
+              <div className="py-8 text-center text-gray-400">
+                <p className="text-sm">No interaction data yet.</p>
+                <p className="text-xs mt-1">Start viewing your 3D products to generate analytics.</p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-gray-700">Total interactions</h2>
+                  <span className="text-2xl font-bold text-indigo-600">{totalEvents}</span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {Object.keys(EVENT_LABELS).map(type => {
+                    const count = stats.reduce((s, p) => s + (p.counts[type as keyof typeof p.counts] ?? 0), 0);
+                    return <StatPill key={type} label={EVENT_LABELS[type]} value={count} />;
+                  })}
+                </div>
+              </Card>
+            </>
+          )}
+
+          {/* Embed domain breakdown — only when there are analytics events */}
+          {stats.length > 0 && embedDomains.length > 0 && (
             <Card>
               <h2 className="text-sm font-semibold text-gray-700 mb-4">Top embed domains</h2>
               <div className="space-y-2">
@@ -148,7 +190,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
           )}
 
           {/* Per-product cards */}
-          <h2 className="text-sm font-semibold text-gray-700">By product</h2>
+          {stats.length > 0 && <h2 className="text-sm font-semibold text-gray-700">By product</h2>}
           {stats.map(stat => {
             const productHotspots = hotspotStats[stat.productId] ?? [];
             const avgMs = avgSessions[stat.productId];

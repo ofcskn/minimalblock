@@ -7,6 +7,7 @@ import { UploadPage } from '../pages/UploadPage.js';
 import { ProductDetailPage } from '../pages/ProductDetailPage.js';
 import { EmbedPage } from '../pages/EmbedPage.js';
 import { DashboardPage } from '../pages/DashboardPage.js';
+import { OrdersPage } from '../pages/OrdersPage.js';
 import { PublicProductPage } from '../pages/PublicProductPage.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { AppProvider, useApp } from '../context/AppContext.js';
@@ -36,6 +37,7 @@ function AppRoutes() {
         <Route path="/upload" element={<UploadPage user={user} />} />
         <Route path="/product/:id" element={<ProductDetailPage user={user} />} />
         <Route path="/dashboard" element={<DashboardPage user={user} />} />
+        <Route path="/orders" element={<OrdersPage user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppChrome>

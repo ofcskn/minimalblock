@@ -63,7 +63,8 @@ const NAVIGATION: AdminSidebarSectionData[] = [
         icon: 'pie',
         defaultOpen: true,
         children: [
-          { kind: 'link', id: 'orders', label: 'Orders', href: '/dashboard' },
+          { kind: 'link', id: 'orders', label: 'Orders', href: '/orders' },
+          { kind: 'link', id: 'insights', label: 'Analytics', href: '/dashboard' },
         ],
       },
     ],
@@ -220,9 +221,19 @@ function pageMetaForPathname(pathname: string): {
 
   if (pathname.startsWith('/dashboard')) {
     return {
-      pageTitle: 'Reporting',
+      pageTitle: 'Analytics',
       breadcrumbs: [
-        { id: 'insights', label: 'Insights', href: '/dashboard' },
+        { id: 'reporting', label: 'Reporting' },
+        { id: 'insights', label: 'Analytics' },
+      ],
+    };
+  }
+
+  if (pathname.startsWith('/orders')) {
+    return {
+      pageTitle: 'Orders',
+      breadcrumbs: [
+        { id: 'reporting', label: 'Reporting' },
         { id: 'orders', label: 'Orders' },
       ],
     };

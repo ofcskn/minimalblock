@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTrendyolPublish } from '../lib/trendyol/use-trendyol-publish.js';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Conversion,
@@ -119,6 +120,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [trendyolOpen, setTrendyolOpen] = useState(false);
+  const trendyolPublish = useTrendyolPublish(apiClient);
 
   const lastRotateEvent = useRef(0);
 
@@ -450,6 +453,20 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         )}
         {conversion.status.isFailed() && (
           <Button variant="secondary" onClick={() => navigate('/upload')}>Regenerate</Button>
+        )}
+        {conversion.status.isViewable() && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              trendyolPublish.reset();
+              setTrendyolOpen(true);
+              if (trendyolPublish.phase === 'idle') {
+                void trendyolPublish.generateListing(product.id);
+              }
+            }}
+          >
+            Publish to Trendyol
+          </Button>
         )}
         {downloadError && <p className="self-center text-xs text-red-600">{downloadError}</p>}
       </div>
@@ -787,6 +804,145 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           <Button variant="secondary" onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</Button>
           <Button variant="danger" onClick={handleDelete} loading={deleting}>Delete</Button>
         </div>
+      </Modal>
+
+      <Modal
+        open={trendyolOpen}
+        onClose={() => {
+          if (trendyolPublish.phase !== 'publishing' && trendyolPublish.phase !== 'polling') {
+            setTrendyolOpen(false);
+          }
+        }}
+        title="Publish to Trendyol"
+      >
+        {trendyolPublish.phase === 'generating' && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <Spinner size="lg" label="Gemini is analyzing your product and generating the listing…" />
+            <p className="text-sm text-gray-400 text-center">This takes about 10 seconds</p>
+          </div>
+        )}
+
+        {trendyolPublish.phase === 'reviewing' && trendyolPublish.draft && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">Gemini generated this listing. Review and edit before publishing.</p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+              <input
+                type="text"
+                value={trendyolPublish.draft.title}
+                onChange={(e) => trendyolPublish.updateDraft({ title: e.target.value })}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+              <textarea
+                rows={3}
+                value={trendyolPublish.draft.description}
+                onChange={(e) => trendyolPublish.updateDraft({ description: e.target.value })}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">List price (TRY)</label>
+                <input
+                  type="number"
+                  value={trendyolPublish.draft.listPrice}
+                  onChange={(e) => trendyolPublish.updateDraft({ listPrice: Number(e.target.value) })}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Sale price (TRY)</label>
+                <input
+                  type="number"
+                  value={trendyolPublish.draft.salePrice}
+                  onChange={(e) => trendyolPublish.updateDraft({ salePrice: Number(e.target.value) })}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Brand</label>
+              <input
+                type="text"
+                value={trendyolPublish.draft.brandName}
+                onChange={(e) => trendyolPublish.updateDraft({ brandName: e.target.value })}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            {trendyolPublish.draft.attributes.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-2">AI-suggested attributes</p>
+                <div className="flex flex-wrap gap-2">
+                  {trendyolPublish.draft.attributes.map((attr) => (
+                    <span key={attr.name} className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">
+                      {attr.name}: {attr.value}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-1 text-[10px] text-gray-400">AI-suggested, verify before publishing</p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setTrendyolOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!trendyolPublish.draft || !conversion.sourceAssets[0]) return;
+                  const barcode = `MB-${product.id.slice(0, 8).toUpperCase()}`;
+                  void trendyolPublish.publish(trendyolPublish.draft, conversion.sourceAssets[0].url, barcode);
+                }}
+              >
+                Publish to Trendyol
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {(trendyolPublish.phase === 'publishing' || trendyolPublish.phase === 'polling') && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <Spinner size="lg" label={trendyolPublish.phase === 'publishing' ? 'Submitting to Trendyol…' : 'Waiting for Trendyol to process…'} />
+            {trendyolPublish.batchRequestId && (
+              <p className="text-xs text-gray-400">Batch ID: {trendyolPublish.batchRequestId}</p>
+            )}
+          </div>
+        )}
+
+        {trendyolPublish.phase === 'done' && (
+          <div className="space-y-4 py-4 text-center">
+            <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${trendyolPublish.batchStatus === 'FAILED' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+              {trendyolPublish.batchStatus === 'FAILED' ? 'Submission failed on Trendyol' : trendyolPublish.batchStatus === 'IN_PROGRESS' ? 'Processing (check Trendyol panel)' : 'Published successfully'}
+            </div>
+            <p className="text-sm text-gray-500">
+              {trendyolPublish.batchStatus === 'DONE'
+                ? 'Your product is now live on Trendyol. It may take a few minutes to appear in search results.'
+                : trendyolPublish.batchStatus === 'IN_PROGRESS'
+                  ? 'The listing is processing. Check the Trendyol Seller Center for status updates.'
+                  : 'The batch had errors. Check the Trendyol Seller Center for details.'}
+            </p>
+            <Button size="sm" onClick={() => setTrendyolOpen(false)}>Done</Button>
+          </div>
+        )}
+
+        {trendyolPublish.phase === 'error' && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{trendyolPublish.error}</div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setTrendyolOpen(false)}>Close</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  trendyolPublish.reset();
+                  void trendyolPublish.generateListing(product.id);
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal open={embedOpen} onClose={() => { setEmbedOpen(false); setCopied(false); }} title="Share / Embed">
