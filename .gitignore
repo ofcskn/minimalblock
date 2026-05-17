@@ -58,3 +58,6 @@ Thumbs.db
 vite.config.*.timestamp*
 vitest.config.*.timestamp*
 test-output
+
+apps/api/.env
+apps/api/.env.production

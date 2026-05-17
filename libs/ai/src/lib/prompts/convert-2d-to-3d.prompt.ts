@@ -16,7 +16,7 @@ Your task:
 4. Ensure the model is centred at the origin, Y-up, with real-world scale in metres.
 5. Include PBR materials with base colour, roughness, and metallic maps derived from the photograph.
 
-Respond with ONLY the raw GLB binary data. Do not include any explanatory text.`;
+Respond with ONLY the base64-encoded GLB binary data. Do not include any explanatory text, markdown, code fences, or a data URI prefix.`;
 }
 
 export function buildImageAnalysisPrompt(): string {

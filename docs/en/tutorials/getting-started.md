@@ -5,7 +5,7 @@ description: Set up the Minimal Block development environment, configure environ
 
 # Getting Started
 
-This tutorial walks through cloning the repository, installing dependencies, configuring Supabase and Gemini, and running the web app and docs site on your machine.
+This tutorial walks through cloning the repository, installing dependencies, configuring Supabase and Gemini, and running the web app, API, and docs site on your machine.
 
 ---
 
@@ -13,13 +13,13 @@ This tutorial walks through cloning the repository, installing dependencies, con
 
 ### Node.js and package manager
 
-Install [Node.js](https://nodejs.org) 20 or later. The project uses npm as the default package manager (specified in `package.json`).
+Install [Node.js](https://nodejs.org) 20 or later. The project uses pnpm as its package manager.
 
 Verify your versions:
 
 ```bash
 node --version   # v20.x or later
-npm --version    # 10.x or later
+pnpm --version   # 8.x or later
 ```
 
 ### Required accounts
@@ -47,63 +47,91 @@ pnpm install
 
 ## Configure environment variables
 
-Create a `.env` file at the repository root. This file is listed in `.gitignore` — never commit it.
+The project uses two separate `.env` files — one for the web frontend and one for the Node.js API backend. Neither should be committed to version control.
 
-```sh
-VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
-VITE_GEMINI_API_KEY=<your-gemini-api-key>
+### Web app — root `.env`
+
+Copy the example and fill in the values:
+
+```bash
+cp .env.example .env
 ```
 
-### VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+```sh
+# .env (repo root)
+VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+VITE_API_BASE_URL=http://localhost:8787
+```
 
-Find both values in the Supabase dashboard under **Settings** → **API**.
+Find `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the Supabase dashboard under **Settings** → **API**.
 
 The anon key is safe for client-side use — Row Level Security on the database restricts every query to the authenticated user's own rows.
 
 If you have not set up your Supabase project yet, follow the [Configure Supabase](/en/how-to/configure-supabase) guide first.
 
-### VITE_GEMINI_API_KEY
+### API backend — `apps/api/.env`
 
-Find this in [Google AI Studio](https://aistudio.google.com) under **Get API key**.
+Copy the example and fill in the values:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+```
+
+```sh
+# apps/api/.env
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+GEMINI_API_KEY=<your-gemini-api-key>
+```
+
+Find `SUPABASE_SERVICE_ROLE_KEY` in the Supabase dashboard under **Settings** → **API** → **Service role key** (keep this secret — it bypasses RLS).
+
+Find `GEMINI_API_KEY` in [Google AI Studio](https://aistudio.google.com) under **Get API key**.
+
+::: warning GEMINI_API_KEY is backend-only
+`GEMINI_API_KEY` must **never** be set in the root `.env` or any `VITE_`-prefixed variable. Vite inlines `VITE_*` variables into the browser bundle, which would expose the key publicly. All Gemini calls are made by `apps/api` server-side.
+:::
 
 If you have not generated a key yet, follow the [Configure Gemini AI](/en/how-to/configure-gemini) guide first.
 
-### Optional variables
-
-No other variables are required to run the app locally.
-
 ---
 
-## Run the dev server
+## Run the dev servers
 
-Start the web app:
+Start all three services:
 
 ```bash
-pnpm dev
-# or via Nx:
+# Terminal 1 — API (port 8787)
+pnpm nx serve api
+
+# Terminal 2 — Web app (port 4200)
 pnpm nx serve web
-```
 
-The app opens at `http://localhost:4200` by default.
-
-Start the docs site:
-
-```bash
-pnpm docs:dev
-# or via Nx:
+# Terminal 3 — Docs site (port 5173)
 pnpm nx serve docs
 ```
 
-The docs open at `http://localhost:5173`.
+Or start the web app and API together:
+
+```bash
+pnpm nx run-many -t serve -p web api
+```
 
 ---
 
 ## Verify the setup
 
+### Check the API
+
+```bash
+curl http://localhost:8787/health
+# → {"status":"ok"}
+```
+
 ### Check the web app
 
-Open `http://localhost:4200`. You should see the app shell without console errors. If you see a Supabase error (e.g., "Invalid API key"), check `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in your `.env` file.
+Open `http://localhost:4200`. You should see the app shell without console errors. If you see a Supabase error (e.g., "Invalid API key"), check `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in your root `.env` file.
 
 ### Check the docs site
 

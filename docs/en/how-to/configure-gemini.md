@@ -5,20 +5,26 @@ description: Obtain a Gemini API key, understand model identifiers, test the pip
 
 # Configure Gemini AI
 
+## Architecture note
+
+**Gemini calls are made server-side only.** `GEMINI_API_KEY` lives in `apps/api/.env` and is never sent to the browser. The web app calls `apps/api` over HTTP; `apps/api` calls Gemini on its behalf.
+
+---
+
 ## Obtain a Gemini API key
 
 1. Open [aistudio.google.com](https://aistudio.google.com) and sign in with a Google account.
 2. Click **Get API key** → **Create API key in new project**.
 3. Copy the generated key.
 
-Add it to your `.env` file at the repository root:
+Add it to `apps/api/.env` (copy from `apps/api/.env.example` if the file does not exist yet):
 
 ```sh
-VITE_GEMINI_API_KEY=<your-api-key>
+GEMINI_API_KEY=<your-api-key>
 ```
 
 ::: danger Keep this key private
-Never commit `VITE_GEMINI_API_KEY` to version control. If you accidentally expose it, revoke it immediately in the Google AI Studio dashboard and generate a new one.
+Never commit `GEMINI_API_KEY` to version control. If you accidentally expose it, revoke it immediately in the Google AI Studio dashboard and generate a new one.
 :::
 
 ---
@@ -28,14 +34,14 @@ Never commit `VITE_GEMINI_API_KEY` to version control. If you accidentally expos
 Two model IDs are defined in `libs/ai/src/lib/gemini/gemini-client.ts`:
 
 ```ts
-export const DEFAULT_MODEL_ID = 'gemini-2.0-flash-exp'
-export const ANALYSIS_MODEL_ID = 'gemini-1.5-pro'
+export const DEFAULT_MODEL_ID = 'gemini-2.5-flash'
+export const ANALYSIS_MODEL_ID = 'gemini-2.5-pro'
 ```
 
 | Constant | Model | Used for |
 |---|---|---|
-| `DEFAULT_MODEL_ID` | `gemini-2.0-flash-exp` | 3D GLB generation from an image |
-| `ANALYSIS_MODEL_ID` | `gemini-1.5-pro` | Image analysis — description and category suggestion |
+| `DEFAULT_MODEL_ID` | `gemini-2.5-flash` | 3D GLB generation from an image |
+| `ANALYSIS_MODEL_ID` | `gemini-2.5-pro` | Image analysis — description and category suggestion |
 
 `createGenerativeModel(apiKey)` defaults to `DEFAULT_MODEL_ID`. Pass `ANALYSIS_MODEL_ID` as the second argument when instantiating `GeminiImageAnalyzer`.
 
@@ -43,13 +49,14 @@ export const ANALYSIS_MODEL_ID = 'gemini-1.5-pro'
 
 ## Test the pipeline with a local image
 
-Instantiate `GeminiModelGenerator` directly to verify your API key and the generation endpoint work before wiring it to the UI:
+`apps/api` exposes the Gemini pipeline. You can verify the key works by hitting the `/analyze-product` or `/generate-model` endpoints directly with `curl`, or by instantiating the classes from Node.js using the `GEMINI_API_KEY` env var:
 
 ```ts
 import { createGenerativeModel, GeminiModelGenerator } from '@minimalblock/ai'
 import { MediaAsset } from '@minimalblock/core'
 
-const model = createGenerativeModel(import.meta.env.VITE_GEMINI_API_KEY)
+// process.env.GEMINI_API_KEY — set in apps/api/.env
+const model = createGenerativeModel(process.env.GEMINI_API_KEY!)
 const generator = new GeminiModelGenerator(model)
 
 const sourceAsset = new MediaAsset({
@@ -96,8 +103,8 @@ Free-tier Gemini quotas reset every minute. If you send multiple requests in qui
 Error: [429 Too Many Requests] Resource has been exhausted
 ```
 
-Catch this in the feature hook and call `conversion.markFailed(error.message)` before re-throwing or surfacing the error in the UI.
+`apps/api` surfaces this as a 500 response. Catch it in the feature hook and call `conversion.markFailed(error.message)` before re-throwing or surfacing the error in the UI.
 
 ::: tip Quota limits
-`gemini-2.0-flash-exp` and `gemini-1.5-pro` have **separate** per-minute quotas. Hitting the limit on the generation model does not affect the analysis model, and vice versa.
+`gemini-2.5-flash` and `gemini-2.5-pro` have **separate** per-minute quotas. Hitting the limit on the generation model does not affect the analysis model, and vice versa.
 :::

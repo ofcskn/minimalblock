@@ -5,7 +5,7 @@ description: Minimal Block geliştirme ortamını kurun, ortam değişkenlerini 
 
 # Başlarken
 
-Bu ders, depoyu klonlamayı, bağımlılıkları yüklemeyi, Supabase ve Gemini'yi yapılandırmayı ve web uygulaması ile belge sitesini yerel ortamınızda çalıştırmayı anlatır.
+Bu ders, depoyu klonlamayı, bağımlılıkları yüklemeyi, Supabase ve Gemini'yi yapılandırmayı ve web uygulaması, API ile belge sitesini yerel ortamınızda çalıştırmayı anlatır.
 
 ---
 
@@ -13,13 +13,13 @@ Bu ders, depoyu klonlamayı, bağımlılıkları yüklemeyi, Supabase ve Gemini'
 
 ### Node.js ve paket yöneticisi
 
-[Node.js](https://nodejs.org) 20 veya daha yenisini yükleyin. Proje varsayılan paket yöneticisi olarak npm kullanır (`package.json` dosyasında belirtilmiştir).
+[Node.js](https://nodejs.org) 20 veya daha yenisini yükleyin. Proje paket yöneticisi olarak pnpm kullanır.
 
 Sürümlerinizi doğrulayın:
 
 ```bash
 node --version   # v20.x veya üzeri
-npm --version    # 10.x veya üzeri
+pnpm --version   # 8.x veya üzeri
 ```
 
 ### Gerekli hesaplar
@@ -47,63 +47,91 @@ pnpm install
 
 ## Ortam değişkenlerini yapılandırın
 
-Depo kökünde bir `.env` dosyası oluşturun. Bu dosya `.gitignore` listesindedir — asla commit etmeyin.
+Proje iki ayrı `.env` dosyası kullanır — biri web ön yüzü için, diğeri Node.js API arka ucu için. Hiçbiri sürüm kontrolüne eklenmemelidir.
 
-```sh
-VITE_SUPABASE_URL=https://<proje-ref-kodunuz>.supabase.co
-VITE_SUPABASE_ANON_KEY=<supabase-anon-anahtarınız>
-VITE_GEMINI_API_KEY=<gemini-api-anahtarınız>
+### Web uygulaması — kök `.env`
+
+Örnek dosyayı kopyalayın ve değerleri doldurun:
+
+```bash
+cp .env.example .env
 ```
 
-### VITE_SUPABASE_URL ve VITE_SUPABASE_ANON_KEY
+```sh
+# .env (depo kökü)
+VITE_SUPABASE_URL=https://<proje-ref-kodunuz>.supabase.co
+VITE_SUPABASE_ANON_KEY=<supabase-anon-anahtarınız>
+VITE_API_BASE_URL=http://localhost:8787
+```
 
-Her iki değeri de Supabase panosunda **Settings** → **API** altında bulabilirsiniz.
+`VITE_SUPABASE_URL` ve `VITE_SUPABASE_ANON_KEY` değerlerini Supabase panosunda **Settings** → **API** altında bulabilirsiniz.
 
 Anon anahtar istemci tarafında kullanım için güvenlidir — veritabanındaki Satır Düzeyi Güvenlik her sorguyu kimliği doğrulanmış kullanıcının kendi satırlarıyla sınırlar.
 
 Supabase projenizi henüz kurmadıysanız önce [Supabase Yapılandır](/tr/how-to/configure-supabase) rehberini izleyin.
 
-### VITE_GEMINI_API_KEY
+### API arka ucu — `apps/api/.env`
 
-Bu değeri [Google AI Studio](https://aistudio.google.com) üzerinde **Get API key** bölümünde bulabilirsiniz.
+Örnek dosyayı kopyalayın ve değerleri doldurun:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+```
+
+```sh
+# apps/api/.env
+SUPABASE_URL=https://<proje-ref-kodunuz>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-anahtarınız>
+GEMINI_API_KEY=<gemini-api-anahtarınız>
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` değerini Supabase panosunda **Settings** → **API** → **Service role key** altında bulabilirsiniz (gizli tutun — RLS'yi atlar).
+
+`GEMINI_API_KEY` değerini [Google AI Studio](https://aistudio.google.com) üzerinde **Get API key** bölümünde bulabilirsiniz.
+
+::: warning GEMINI_API_KEY yalnızca arka uçta kullanılır
+`GEMINI_API_KEY`, kök `.env` dosyasına veya herhangi bir `VITE_` önekli değişkene **asla** eklenmemelidir. Vite, `VITE_*` değişkenlerini tarayıcı paketine gömer ve bu durum anahtarı herkese açık hale getirir. Tüm Gemini çağrıları `apps/api` tarafından sunucu tarafında yapılır.
+:::
 
 Henüz bir anahtar oluşturmadıysanız önce [Gemini AI Yapılandır](/tr/how-to/configure-gemini) rehberini izleyin.
 
-### İsteğe bağlı değişkenler
-
-Uygulamayı yerel ortamda çalıştırmak için başka bir değişken gerekli değildir.
-
 ---
 
-## Geliştirme sunucusunu başlatın
+## Geliştirme sunucularını başlatın
 
-Web uygulamasını başlatın:
+Üç hizmeti de başlatın:
 
 ```bash
-pnpm dev
-# veya Nx aracılığıyla:
+# Terminal 1 — API (8787 portu)
+pnpm nx serve api
+
+# Terminal 2 — Web uygulaması (4200 portu)
 pnpm nx serve web
-```
 
-Uygulama varsayılan olarak `http://localhost:4200` adresinde açılır.
-
-Belge sitesini başlatın:
-
-```bash
-pnpm docs:dev
-# veya Nx aracılığıyla:
+# Terminal 3 — Belge sitesi (5173 portu)
 pnpm nx serve docs
 ```
 
-Belgeler `http://localhost:5173` adresinde açılır.
+Veya web uygulaması ve API'yi birlikte başlatın:
+
+```bash
+pnpm nx run-many -t serve -p web api
+```
 
 ---
 
 ## Kurulumu doğrulayın
 
+### API'yi kontrol edin
+
+```bash
+curl http://localhost:8787/health
+# → {"status":"ok"}
+```
+
 ### Web uygulamasını kontrol edin
 
-`http://localhost:4200` adresini açın. Konsol hatası olmadan uygulama kabuğunu görmelisiniz. Supabase hatası görürseniz (örn. "Invalid API key"), `.env` dosyasındaki `VITE_SUPABASE_URL` ve `VITE_SUPABASE_ANON_KEY` değerlerini kontrol edin.
+`http://localhost:4200` adresini açın. Konsol hatası olmadan uygulama kabuğunu görmelisiniz. Supabase hatası görürseniz (örn. "Invalid API key"), kök `.env` dosyasındaki `VITE_SUPABASE_URL` ve `VITE_SUPABASE_ANON_KEY` değerlerini kontrol edin.
 
 ### Belge sitesini kontrol edin
 

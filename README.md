@@ -1,105 +1,122 @@
-# New Nx Repository
+# Minimal Block
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+AI-powered 3D product previews for e-commerce. Upload a product photo; get an embeddable GLB model in seconds.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+## Architecture
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `pnpm nx graph` to visually explore what was created. Now, let's get you up to speed!
-## Try the full Nx platform
-🚀 If you haven't connected to Nx Cloud yet, [complete your setup here](https://cloud.nx.app/setup/connect-workspace/guide). Get faster builds with remote caching, distributed task execution, and self-healing CI. [See how your workspace can benefit](#nx-cloud).
-## Generate a library
+```
+apps/
+  web/          React + Vite frontend (port 4200)
+  api/          Node.js HTTP API — all Gemini calls live here (port 8787)
+  docs/         VitePress bilingual docs (port 5173)
+libs/
+  ai/           Gemini client, model generator, image analyzer
+  core/         Domain models (Product, Conversion, MediaAsset …)
+  data/         Supabase repository implementations
+  features/     React feature modules
+  ui/           Shared component library
+```
+
+Gemini is called **server-side only** from `apps/api`. The browser never receives or uses `GEMINI_API_KEY`.
+
+## Quick start
+
+### 1. Install
+
+```bash
+pnpm install
+```
+
+### 2. Configure web app (root `.env`)
+
+```bash
+cp .env.example .env
+```
 
 ```sh
-pnpm nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+VITE_API_BASE_URL=http://localhost:8787
 ```
 
-## Run tasks
+### 3. Configure API backend (`apps/api/.env`)
 
-To build the library use:
+```bash
+cp apps/api/.env.example apps/api/.env
+```
 
 ```sh
-pnpm nx build pkg1
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+GEMINI_API_KEY=<your-gemini-api-key>
 ```
 
-To run any task with Nx use:
+Get `GEMINI_API_KEY` from [aistudio.google.com](https://aistudio.google.com) → **Get API key**.
 
-```sh
-pnpm nx <target> <project-name>
+> **Never** put `GEMINI_API_KEY` in a `VITE_`-prefixed variable — Vite inlines those into the browser bundle.
+
+### 4. Run
+
+```bash
+# API + web app together
+pnpm nx run-many -t serve -p web api
+
+# Docs site
+pnpm nx serve docs
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+| Service | URL |
+|---|---|
+| Web app | http://localhost:4200 |
+| API | http://localhost:8787 |
+| Docs | http://localhost:5173 |
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Environment variables reference
 
-## Versioning and releasing
+### Root `.env` (web app)
 
-To version and release the library use
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_SUPABASE_URL` | Yes | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Supabase anon key (safe for browser) |
+| `VITE_API_BASE_URL` | Yes | Base URL of `apps/api` |
 
-```
-pnpm nx release
-```
+### `apps/api/.env` (backend)
 
-Pass `--dry-run` to see what would happen without actually releasing the library.
+| Variable | Required | Description |
+|---|---|---|
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (bypasses RLS — keep secret) |
+| `GEMINI_API_KEY` | Yes | Google Gemini API key |
+| `API_PORT` | No | Server port (default: `8787`) |
+| `CORS_ORIGIN` | No | Allowed CORS origin (default: `*`) |
 
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Common tasks
 
-## Keep TypeScript project references up to date
+```bash
+# Build all
+pnpm nx run-many -t build
 
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
+# Test all
+pnpm nx run-many -t test
 
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
+# Lint all
+pnpm nx run-many -t lint
 
-```sh
-pnpm nx sync
-```
+# Type-check all
+pnpm nx run-many -t typecheck
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
-
-```sh
-pnpm nx sync:check
-```
-
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
-
-## Nx Cloud
-
-Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Set up CI (non-Github Actions CI)
-
-**Note:** This is only required if your CI provider is not GitHub Actions.
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-pnpm nx g ci-workflow
+# Visualise project graph
+pnpm nx graph
 ```
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Docs
 
-## Install Nx Console
+Full documentation (English and Turkish) is in [`docs/`](docs/index.md) and served at http://localhost:5173 when running `pnpm nx serve docs`.
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+Key guides:
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Useful links
-
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- [Getting Started (EN)](docs/en/tutorials/getting-started.md)
+- [Configure Gemini AI (EN)](docs/en/how-to/configure-gemini.md)
+- [Configure Supabase (EN)](docs/en/how-to/configure-supabase.md)
+- [AI Pipeline Explanation (EN)](docs/en/explanation/ai-pipeline.md)
