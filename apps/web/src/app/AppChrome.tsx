@@ -59,27 +59,30 @@ function pageMetaForPathname(pathname: string): {
 } {
   if (pathname.startsWith('/upload')) {
     return {
-      pageTitle: '3D Model Oluştur',
-      breadcrumbs: [],
+      pageTitle: 'Upload for QA Review',
+      breadcrumbs: [
+        { id: 'qa', label: 'Product QA', href: '/' },
+        { id: 'upload', label: 'Upload' },
+      ],
     };
   }
 
   if (pathname.startsWith('/product/')) {
     return {
-      pageTitle: 'Ürün Detayı',
+      pageTitle: 'QA Review',
       breadcrumbs: [
-        { id: 'catalog', label: 'Katalog', href: '/' },
-        { id: 'gallery', label: 'Galeri', href: '/' },
-        { id: 'detail', label: 'Ürün Detayı' },
+        { id: 'qa', label: 'Product QA', href: '/' },
+        { id: 'queue', label: 'QA Queue', href: '/' },
+        { id: 'detail', label: 'QA Review' },
       ],
     };
   }
 
   return {
-    pageTitle: 'Galeri',
+    pageTitle: 'QA Queue',
     breadcrumbs: [
-      { id: 'catalog', label: 'Katalog', href: '/' },
-      { id: 'gallery', label: 'Galeri' },
+      { id: 'qa', label: 'Product QA', href: '/' },
+      { id: 'queue', label: 'QA Queue' },
     ],
   };
 }
@@ -97,17 +100,17 @@ export function AppChrome({ children, onSignOut }: AppChromeProps) {
   const [language, setLanguage] = useState('tr');
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
-      id: 'gallery-warning',
-      title: 'İki fotoğraf yükleme daha yüksek çözünürlük gerektiriyor',
-      body: '1800px altındaki görseller zayıf 3D geometriye yol açabilir.',
-      ts: '28d önce',
+      id: 'qa-blocked',
+      title: 'Product blocked — QA failed',
+      body: 'Laptop model scored 18/100. Publish gated until issues are resolved.',
+      ts: '2h ago',
       read: false,
     },
     {
-      id: 'sync-complete',
-      title: 'Katalog senkronizasyonu tamamlandı',
-      body: '284 ürün mağaza ön yüzü ve yönetim panelinde hizalandı.',
-      ts: 'Dün',
+      id: 'qa-approved',
+      title: 'Product approved — ready to publish',
+      body: 'Chair model passed QA with 87/100. Export package is ready.',
+      ts: 'Yesterday',
       read: true,
     },
   ]);
@@ -117,9 +120,9 @@ export function AppChrome({ children, onSignOut }: AppChromeProps) {
       id: 'main',
       label: '',
       items: [
-        { kind: 'link' as const, id: 'home', label: 'Ana sayfa', href: '/', icon: 'home' as const },
-        { kind: 'link' as const, id: 'create-3d', label: '3D Oluştur', href: '/upload', icon: 'bolt' as const },
-        { kind: 'link' as const, id: 'brand', label: 'Marka Kimliği', href: '/brand', icon: 'tag' as const },
+        { kind: 'link' as const, id: 'home', label: 'QA Queue', href: '/', icon: 'home' as const },
+        { kind: 'link' as const, id: 'upload', label: 'Upload Product', href: '/upload', icon: 'bolt' as const },
+        { kind: 'link' as const, id: 'brand', label: 'Brand Settings', href: '/brand', icon: 'tag' as const },
       ],
     },
   ];
@@ -152,7 +155,7 @@ export function AppChrome({ children, onSignOut }: AppChromeProps) {
     <DashboardShell
       navigation={navigation}
       isActive={(href) => isCurrentPath(location.pathname, href)}
-      brand={{ name: 'Minimal Block', tagline: 'Commerce control center' }}
+      brand={{ name: 'Minimal Block', tagline: 'AI Visual Commerce QA' }}
       store={store}
       currency={{ id: 'currency', ariaLabel: 'Currency', value: 'TRY', options: [] }}
       language={languageSelector}
