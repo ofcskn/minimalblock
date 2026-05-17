@@ -148,9 +148,9 @@ export function UploadPage({ user }: UploadPageProps) {
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 px-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
           <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
-          3D Oluştur
+          Upload for QA Review
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -160,16 +160,16 @@ export function UploadPage({ user }: UploadPageProps) {
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Yeni sohbet
+            New upload
           </button>
           <button
             onClick={() => navigate('/')}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
             </svg>
-            Sohbet geçmişi
+            QA Queue
           </button>
         </div>
       </div>
@@ -180,16 +180,29 @@ export function UploadPage({ user }: UploadPageProps) {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {/* Empty state */}
           {!conversion && currentFile.length === 0 && !isProcessing && (
-            <div className="flex flex-1 items-center justify-center">
-              <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
-                  <svg className="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+            <div className="flex flex-1 items-center justify-center p-8">
+              <div className="max-w-sm text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50">
+                  <svg className="h-8 w-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                   </svg>
                 </div>
-                <p className="text-sm text-gray-400">
-                  {mode === '3d' ? 'Referans görsel ekle ve ürün detaylarını yaz' : 'GLB dosyası ekle ve ürün detaylarını yaz'}
+                <p className="text-base font-semibold text-gray-900">Safe-to-publish product experience</p>
+                <p className="mt-2 text-sm text-gray-500">
+                  {mode === '3d'
+                    ? 'Add product photos and a description. The AI quality engine will score the output and block anything not ready for buyers.'
+                    : 'Add a GLB model file and product description. The AI engine will validate it before enabling publish.'}
                 </p>
+                <div className="mt-4 flex flex-col gap-2 text-xs text-gray-400">
+                  <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="font-bold text-emerald-500">✓</span>
+                    <span>Passed assets get approved and can be listed</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="font-bold text-red-500">✕</span>
+                    <span>Failed assets are blocked — never shown to buyers</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -240,7 +253,8 @@ export function UploadPage({ user }: UploadPageProps) {
             <div className="flex flex-1 items-center justify-center">
               <div className="text-center">
                 <Spinner size="lg" />
-                <p className="mt-4 text-sm text-gray-400">3D model oluşturuluyor…</p>
+                <p className="mt-4 text-sm font-medium text-gray-700">Running AI quality analysis…</p>
+                <p className="mt-1 text-xs text-gray-400">Scoring geometry, visual fidelity, and source readiness</p>
               </div>
             </div>
           )}
@@ -260,16 +274,37 @@ export function UploadPage({ user }: UploadPageProps) {
                 const report = new QualityReport(conversion.qualityReport);
                 const score = report.score();
                 const isCritical = score < 40;
+                const isWarning = score >= 40 && score < 70;
                 const qa = conversion.qualityReport.geminiQaReport;
                 return (
-                  <div className={`mt-4 rounded-xl p-3 text-sm ${isCritical ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                    <p className="font-medium">Kalite puanı: {score}/100</p>
-                    {qa?.categoryMatch && <p className="mt-1 text-xs opacity-80">Kategori: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}</p>}
-                    {(conversion.qualityReport.warnings.length > 0 || (qa?.missingParts.length ?? 0) > 0) && (
-                      <ul className="mt-2 space-y-0.5 text-xs opacity-70">
-                        {conversion.qualityReport.warnings.map((w) => <li key={w}>• {w}</li>)}
-                        {qa?.missingParts.map((p) => <li key={p}>• Eksik: {p}</li>)}
+                  <div className={`mt-4 rounded-xl border p-4 ${isCritical ? 'border-red-200 bg-red-50' : isWarning ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-sm font-semibold ${isCritical ? 'text-red-900' : isWarning ? 'text-amber-900' : 'text-emerald-900'}`}>
+                        {isCritical ? 'QA Failed — publish blocked' : isWarning ? 'QA Warning — review required' : 'QA Passed — ready for review'}
+                      </p>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${isCritical ? 'bg-red-600' : isWarning ? 'bg-amber-500' : 'bg-emerald-600'}`}>
+                        {score}/100
+                      </span>
+                    </div>
+
+                    {qa?.categoryMatch && (
+                      <p className={`mt-1 text-xs ${isCritical ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-emerald-700'}`}>
+                        Category match: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}
+                      </p>
+                    )}
+
+                    {(conversion.qualityReport.warnings.length > 0 || (qa?.missingParts?.length ?? 0) > 0) && (
+                      <ul className={`mt-2 space-y-1 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                        {conversion.qualityReport.warnings.map((w) => <li key={w} className="flex items-start gap-1"><span>⚠</span>{w}</li>)}
+                        {qa?.missingParts?.map((p) => <li key={p} className="flex items-start gap-1"><span className="font-bold">✕</span>Missing: {p}</li>)}
                       </ul>
+                    )}
+
+                    {isCritical && (
+                      <div className="mt-3 rounded-lg bg-red-600 px-3 py-2">
+                        <p className="text-xs font-semibold text-white">Next action: Re-upload with better source images</p>
+                        <p className="mt-0.5 text-[11px] text-red-100">Use 3+ photos: front, back, and side view on a plain background.</p>
+                      </div>
                     )}
                   </div>
                 );
@@ -277,13 +312,13 @@ export function UploadPage({ user }: UploadPageProps) {
 
               <div className="mt-4 flex justify-end gap-3">
                 <button onClick={newChat} className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                  Yeni sohbet
+                  New upload
                 </button>
                 <button
                   onClick={() => navigate(`/product/${conversion.id}`)}
                   className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
                 >
-                  {conversion.status === 'failed' ? 'QA Raporunu İncele' : 'Ürünü İncele'}
+                  {conversion.status === 'failed' ? 'Review AI Diagnosis' : 'Open QA Review'}
                 </button>
               </div>
             </div>
@@ -297,7 +332,7 @@ export function UploadPage({ user }: UploadPageProps) {
         {/* Right panel */}
         {(productDetails || conversion) && (
           <div className="hidden w-52 shrink-0 border-l border-gray-100 p-4 lg:block">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Şimdi</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">In queue</p>
             {productDetails && (
               <p className="text-xs leading-relaxed text-gray-600">{productDetails}</p>
             )}
@@ -354,7 +389,7 @@ export function UploadPage({ user }: UploadPageProps) {
               value={productDetails}
               onChange={(e) => { setProductDetails(e.target.value); autoResize(e.target); }}
               onKeyDown={handleKeyDown}
-              placeholder="Oluştur veya düzenle..."
+              placeholder="Product name and description (e.g. Oak dining chair, solid wood, natural finish)…"
               rows={1}
               className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
               style={{ maxHeight: '120px' }}
@@ -402,7 +437,7 @@ export function UploadPage({ user }: UploadPageProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
                 </svg>
               )}
-              Referans
+              Add photos
             </button>
           </div>
         </div>
@@ -425,7 +460,7 @@ export function UploadPage({ user }: UploadPageProps) {
                 GLB
               </button>
             </div>
-            <span className="text-xs text-gray-400">Gemini Image Generation</span>
+            <span className="text-xs text-gray-400">AI QA · Gemini-powered</span>
           </div>
           <button className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-[11px] text-gray-400 hover:bg-gray-50">
             ?

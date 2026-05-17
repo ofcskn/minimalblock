@@ -137,6 +137,7 @@ export interface GalleryModel {
   modelUrl?: string;
   hotspotCount: number;
   errorMessage?: string;
+  qaScore?: number;
 }
 
 export interface EmptyStateAction {

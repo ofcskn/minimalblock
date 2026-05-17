@@ -160,8 +160,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   }, [apiClient, conversion]);
 
   const productName = product?.name ?? conversion?.sourceAsset.storageKey.split('/').pop() ?? 'Product';
-  const publicUrl = product && conversion?.status.isViewable() ? `${window.location.origin}${product.publicUrl}` : null;
-  const qualityScore = conversion?.qualityReport?.score();
+  const publicUrl = product && conversion?.status.value === 'approved' ? `${window.location.origin}${product.publicUrl}` : null;
   const visibleHotspots = useMemo(() => hotspots.filter((hotspot) => hotspot.position && hotspot.normal), [hotspots]);
 
   async function saveMeta() {
@@ -341,6 +340,12 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     );
   }
 
+  const isApproved = conversion.status.value === 'approved';
+  const isFailed = conversion.status.value === 'failed' || conversion.status.value === 'rejected';
+  const isAwaitingApproval = conversion.status.isAwaitingApproval();
+  const canPublish = isApproved;
+  const qaScore = conversion.qualityReport?.score();
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {error && (
@@ -360,6 +365,35 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         )}
         <StatusBadge status={conversion.status.value} />
       </div>
+
+      {/* Status banners — seller decision guide */}
+      {isFailed && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold">✕</div>
+          <div>
+            <p className="text-sm font-semibold text-red-900">{t('product.failureBannerTitle')}</p>
+            <p className="mt-1 text-xs text-red-700">{t('product.failureBannerBody')}</p>
+          </div>
+        </div>
+      )}
+      {isAwaitingApproval && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">!</div>
+          <div>
+            <p className="text-sm font-semibold text-amber-900">{t('product.approvalBannerTitle')}</p>
+            <p className="mt-1 text-xs text-amber-700">{t('product.approvalBannerBody')}</p>
+          </div>
+        </div>
+      )}
+      {isApproved && (
+        <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold">✓</div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">{t('product.approvedBannerTitle')}</p>
+            <p className="mt-1 text-xs text-emerald-700">{t('product.approvedBannerBody')}</p>
+          </div>
+        </div>
+      )}
 
       <Card className="overflow-hidden p-0">
         <div className="relative h-[28rem] bg-gray-100">
@@ -411,37 +445,50 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       </Card>
 
       <div className="flex flex-wrap gap-2">
+        {/* Download always available when output exists */}
         {conversion.outputAsset && (
           <Button onClick={handleDownload} loading={downloading}>{t('product.download')}</Button>
         )}
-        {conversion.status.isViewable() && conversion.outputAsset && (
+
+        {/* Embed — only for approved products */}
+        {canPublish && conversion.outputAsset && (
           <Button variant="secondary" onClick={() => setEmbedOpen(true)}>{t('product.embed')}</Button>
         )}
-        {publicUrl && (
+
+        {/* Public page link — only for approved products */}
+        {canPublish && publicUrl && (
           <a
             href={publicUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-indigo-600 px-4 py-2 text-base font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-4 py-2 text-base font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
           >
-            Public page ↗
+            {t('product.sharePublicPage')} ↗
           </a>
         )}
+
+        {/* Hotspot editing — available when output exists */}
         {!editMode && conversion.outputAsset && (
           <Button variant="secondary" onClick={() => setEditMode(true)}>
             {hotspots.length > 0 ? t('product.editHotspots') : t('product.addHotspot')}
           </Button>
         )}
-        {conversion.status.isAwaitingApproval() && (
+
+        {/* Approval actions — awaiting approval state */}
+        {isAwaitingApproval && (
           <>
             <Button onClick={handleApprove} loading={busyAction === 'approve'}>{t('product.approve')}</Button>
             <Button variant="danger" onClick={() => setRejectOpen(true)}>{t('product.reject')}</Button>
           </>
         )}
-        {conversion.status.isFailed() && (
-          <Button variant="secondary" onClick={() => navigate('/upload')}>Regenerate</Button>
+
+        {/* Fix path for failed products */}
+        {isFailed && (
+          <Button variant="secondary" onClick={() => navigate('/upload')}>Re-upload with better images</Button>
         )}
-        {conversion.status.isViewable() && (
+
+        {/* Export to Trendyol — only for approved products */}
+        {canPublish && (
           <Button
             variant="secondary"
             onClick={() => {
@@ -455,15 +502,93 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             {t('product.publishTrendyol')}
           </Button>
         )}
+
         {downloadError && <p className="self-center text-xs text-red-600">{downloadError}</p>}
+      </div>
+
+      {/* Marketplace readiness + export package status */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {/* QA Score */}
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.qaScoreLabel')}</p>
+          {qaScore !== undefined ? (
+            <div className="mt-2 flex items-end gap-2">
+              <p className={`text-3xl font-bold ${qaScore >= 70 ? 'text-emerald-600' : qaScore >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                {qaScore}<span className="text-base font-normal text-gray-400">/100</span>
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-gray-400">Not scored yet</p>
+          )}
+          {qaScore !== undefined && (
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+              <div
+                className={`h-full rounded-full ${qaScore >= 70 ? 'bg-emerald-500' : qaScore >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${qaScore}%` }}
+              />
+            </div>
+          )}
+        </Card>
+
+        {/* Marketplace readiness */}
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.marketplaceReadiness')}</p>
+          <div className="mt-2">
+            {isApproved ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                {t('product.readinessApproved')}
+              </span>
+            ) : isFailed ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                {t('product.readinessBlocked')}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                {t('product.readinessPending')}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            {isApproved ? 'Trendyol · Shopify · Amazon' : 'Listing blocked until QA passes'}
+          </p>
+        </Card>
+
+        {/* Export package */}
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.exportPackage')}</p>
+          <div className="mt-2">
+            {isApproved ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                {t('product.exportPackageReady')}
+              </span>
+            ) : isFailed ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                {t('product.exportPackageBlocked')}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-600">
+                <span className="h-2 w-2 rounded-full bg-slate-400" />
+                {t('product.exportPackagePending')}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            {isApproved ? 'GLB · preview · catalog metadata' : 'Available after approval'}
+          </p>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <div className="mb-4 flex items-start justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">Merchant review</h2>
-              <p className="mt-1 text-xs text-gray-500">This is the seller-facing control center for product metadata, AI output, and publish state.</p>
+              <h2 className="text-sm font-semibold text-gray-900">Seller review</h2>
+              <p className="mt-1 text-xs text-gray-500">AI quality diagnosis, source images, and product metadata. Approve to unlock publish — or block to request a fix.</p>
             </div>
             {editingMeta ? (
               <div className="flex gap-2">
@@ -516,46 +641,64 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
                 <span>{t(`category.${product.category}`)}</span>
                 {conversion.outputAsset && <span>{(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>}
-                {qualityScore !== undefined && <span>Asset quality score: {qualityScore}/100</span>}
+                {qaScore !== undefined && <span>QA score: {qaScore}/100</span>}
               </div>
               {conversion.errorMessage && !conversion.qualityReport?.geminiQaReport && (
-                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                  <p className="font-semibold">AI diagnosis failed</p>
+                  <p className="mt-1 text-xs">{conversion.errorMessage}</p>
+                </div>
               )}
               {conversion.qualityReport?.geminiQaReport && (() => {
                 const qa = conversion.qualityReport.geminiQaReport!;
                 const score = conversion.qualityReport.score();
                 const isCritical = score < 40;
+                const isWarning = score >= 40 && score < 70;
                 return (
-                  <div className={`mt-3 rounded-xl p-3 text-sm ${isCritical ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
-                    <p className="font-semibold">
-                      Visual QA: {score}/100 —{' '}
-                      <span className="font-normal">{qa.status.replace(/_/g, ' ')}</span>
+                  <div className={`mt-3 rounded-xl border p-4 ${isCritical ? 'border-red-200 bg-red-50' : isWarning ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-sm font-semibold ${isCritical ? 'text-red-900' : isWarning ? 'text-amber-900' : 'text-emerald-900'}`}>
+                        AI Visual QA Diagnosis
+                      </p>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${isCritical ? 'bg-red-600 text-white' : isWarning ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}>
+                        {score}/100
+                      </span>
+                    </div>
+                    <p className={`mt-1 text-xs capitalize ${isCritical ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {qa.status.replace(/_/g, ' ')} · Category match: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}
                     </p>
-                    <p className="mt-1 text-xs">
-                      Category match: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}
-                    </p>
+
                     {qa.missingParts.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium">Missing parts:</p>
-                        <ul className={`mt-1 space-y-0.5 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
-                          {qa.missingParts.map((p) => <li key={p}>• {p}</li>)}
+                      <div className="mt-3">
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>Missing from 3D model</p>
+                        <ul className={`mt-1.5 space-y-1 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                          {qa.missingParts.map((p) => <li key={p} className="flex items-start gap-1.5"><span className="mt-0.5 font-bold">✕</span>{p}</li>)}
                         </ul>
                       </div>
                     )}
+
                     {qa.sourceImageIssues.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium">Source image issues:</p>
-                        <ul className={`mt-1 space-y-0.5 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
-                          {qa.sourceImageIssues.map((issue) => <li key={issue}>• {issue}</li>)}
+                      <div className="mt-3">
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>Source image issues</p>
+                        <ul className={`mt-1.5 space-y-1 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                          {qa.sourceImageIssues.map((issue) => <li key={issue} className="flex items-start gap-1.5"><span className="mt-0.5">⚠</span>{issue}</li>)}
                         </ul>
                       </div>
                     )}
+
                     {qa.recommendedActions.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium">Recommended actions:</p>
-                        <ul className={`mt-1 space-y-0.5 text-xs font-medium ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>
-                          {qa.recommendedActions.map((action) => <li key={action}>→ {action}</li>)}
+                      <div className="mt-3">
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${isCritical ? 'text-red-800' : isWarning ? 'text-amber-800' : 'text-emerald-800'}`}>Recommended next actions</p>
+                        <ul className={`mt-1.5 space-y-1 text-xs font-medium ${isCritical ? 'text-red-900' : isWarning ? 'text-amber-900' : 'text-emerald-900'}`}>
+                          {qa.recommendedActions.map((action) => <li key={action} className="flex items-start gap-1.5"><span className="mt-0.5">→</span>{action}</li>)}
                         </ul>
+                      </div>
+                    )}
+
+                    {isCritical && (
+                      <div className="mt-4 rounded-lg bg-red-600 px-3 py-2">
+                        <p className="text-xs font-semibold text-white">Next action: Re-upload with more image angles</p>
+                        <p className="mt-0.5 text-[11px] text-red-100">Use at least 3 photos showing front, back, and side. Avoid busy backgrounds.</p>
                       </div>
                     )}
                   </div>
