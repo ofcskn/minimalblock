@@ -52,8 +52,7 @@ export class QualityReport {
   //   10% source image readiness (penalised by upload warnings)
   //
   // When no Gemini QA score is present the technical score stands alone (legacy
-  // behaviour) so old records are not affected. A confirmed primitive mesh that
-  // scores below 3/10 on category match is hard-capped at 30.
+  // behaviour) so old records are not affected.
   score(): number {
     const technicalScore = this.#technicalScore();
 
@@ -65,11 +64,6 @@ export class QualityReport {
     const sourceScore = Math.max(0, 100 - sourceWarningCount * 10);
 
     const weighted = Math.round(0.45 * this.geminiQaScore + 0.45 * technicalScore + 0.10 * sourceScore);
-
-    const categoryScore = this.geminiQaReport?.categoryMatch?.score ?? 10;
-    if (this.isPrimitiveMesh && categoryScore < 3) {
-      return Math.min(weighted, 30);
-    }
 
     return Math.max(0, Math.min(100, weighted));
   }

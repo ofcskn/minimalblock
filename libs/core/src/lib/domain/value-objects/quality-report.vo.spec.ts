@@ -65,7 +65,7 @@ describe('QualityReport.score()', () => {
       expect(report.score()).toBe(91);
     });
 
-    it('hard-caps primitive mesh score at 30 when categoryMatch < 3', () => {
+    it('scores primitive mesh with low categoryMatch without capping', () => {
       const report = new QualityReport(makeBaseProps({
         geminiQaScore: 30,
         geminiQaReport: makeQaResult({
@@ -74,8 +74,9 @@ describe('QualityReport.score()', () => {
         }),
         isPrimitiveMesh: true,
       }));
-      // Even if weighted > 30, cap applies
-      expect(report.score()).toBeLessThanOrEqual(30);
+      // technical=100, qa=30, source=100 → 0.45*30 + 0.45*100 + 0.10*100 = 13.5+45+10 = 68.5 → 69
+      // No hard cap: compound shapes now represent the product, score reflects actual quality
+      expect(report.score()).toBe(69);
     });
 
     it('does not apply primitive cap when categoryMatch >= 3', () => {

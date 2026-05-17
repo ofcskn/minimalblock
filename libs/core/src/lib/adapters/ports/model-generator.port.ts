@@ -6,7 +6,7 @@ export interface GenerateModelInput {
   qualityHint?: 'fast' | 'balanced' | 'quality';
 }
 
-export interface GeneratedPrimitive {
+export interface GeneratedPrimitivePart {
   shape: 'box' | 'cylinder' | 'sphere';
   widthM: number;
   heightM: number;
@@ -14,6 +14,18 @@ export interface GeneratedPrimitive {
   baseColor: [number, number, number, number];
   roughness: number;
   metalness: number;
+  description?: string;
+}
+
+export interface GeneratedPrimitive {
+  shape: 'box' | 'cylinder' | 'sphere' | 'compound';
+  widthM: number;
+  heightM: number;
+  depthM: number;
+  baseColor: [number, number, number, number];
+  roughness: number;
+  metalness: number;
+  parts?: GeneratedPrimitivePart[];
 }
 
 export interface GenerateModelOutput {

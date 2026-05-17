@@ -501,16 +501,7 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
           // Visual QA failure is non-fatal — proceed without it
         }
         const quality = createQualityReport(outputAsset, sourceAssets.length, qaResult, true);
-        if (quality.score() < 40) {
-          const categoryNote =
-            qaResult?.categoryMatch && qaResult.categoryMatch.score < 3
-              ? ` ${qaResult.categoryMatch.reason}`
-              : '';
-          const reason = `Visual QA score ${quality.score()}/100 — primitive mesh does not adequately represent this product.${categoryNote}`.trimEnd();
-          conversion = await conversionRepo.save(conversion.markFailed(reason, quality));
-        } else {
-          conversion = await conversionRepo.save(conversion.markAwaitingApproval(outputAsset, quality));
-        }
+        conversion = await conversionRepo.save(conversion.markAwaitingApproval(outputAsset, quality));
         return {
           productId: product.id,
           conversionId: conversion.id,

@@ -2,7 +2,7 @@ import { IModelGeneratorPort, GenerateModelInput, GenerateModelOutput, MediaAsse
 import type { GenerativeModel } from '@google/generative-ai';
 import { buildConvert2DTo3DPrompt } from '../prompts/convert-2d-to-3d.prompt.js';
 import type { QualityHint } from '../types/ai-request.types.js';
-import { buildGlbFromShape, type ShapeParams } from './glb-builder.js';
+import { buildGlbFromShape, buildCompoundGlb, buildCategoryParts, type ShapeParams } from './glb-builder.js';
 // Re-export for convenience so callers can import from this module
 export type { ShapeParams };
 
@@ -69,7 +69,10 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
     const raw = result.response.text().trim();
     const shapeParams = parseShapeParams(raw);
 
-    const glb = buildGlbFromShape(shapeParams);
+    // Build category-appropriate compound or single-primitive shape
+    const parts = buildCategoryParts(input.productCategory, shapeParams);
+    const isCompound = parts.length > 1;
+    const glb = isCompound ? buildCompoundGlb(parts) : buildGlbFromShape(shapeParams);
 
     let glbBinary = '';
     for (let i = 0; i < glb.byteLength; i += 1) {
@@ -85,18 +88,40 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
       sizeBytes: glb.byteLength,
     });
 
+    const generatedPrimitive = isCompound
+      ? {
+          shape: 'compound' as const,
+          widthM: shapeParams.width,
+          heightM: shapeParams.height,
+          depthM: shapeParams.depth,
+          baseColor: shapeParams.baseColor,
+          roughness: shapeParams.roughness,
+          metalness: shapeParams.metalness,
+          parts: parts.map((part) => ({
+            shape: part.shape,
+            widthM: part.width,
+            heightM: part.height,
+            depthM: part.depth,
+            baseColor: part.baseColor,
+            roughness: part.roughness,
+            metalness: part.metalness,
+            description: part.description,
+          })),
+        }
+      : {
+          shape: shapeParams.shape,
+          widthM: shapeParams.width,
+          heightM: shapeParams.height,
+          depthM: shapeParams.depth,
+          baseColor: shapeParams.baseColor,
+          roughness: shapeParams.roughness,
+          metalness: shapeParams.metalness,
+        };
+
     return {
       outputAsset,
       tokensUsed,
-      generatedPrimitive: {
-        shape: shapeParams.shape,
-        widthM: shapeParams.width,
-        heightM: shapeParams.height,
-        depthM: shapeParams.depth,
-        baseColor: shapeParams.baseColor,
-        roughness: shapeParams.roughness,
-        metalness: shapeParams.metalness,
-      },
+      generatedPrimitive,
     };
   }
 }
