@@ -57,7 +57,7 @@ export interface ApiEnv {
   geminiApiKey: string;
   port: number;
   corsOrigin: string;
-  trendyolSellerId: string;
+  trendyolMerchantId: string;
   trendyolApiKey: string;
   trendyolApiSecret: string;
   trendyolMock: boolean;
@@ -86,10 +86,10 @@ function getEnv(): ApiEnv {
     geminiApiKey,
     port: Number(process.env['API_PORT'] ?? 8787),
     corsOrigin: process.env['CORS_ORIGIN'] ?? '*',
-    trendyolSellerId: process.env['TRENDYOL_SELLER_ID'] ?? '',
+    trendyolMerchantId: process.env['TRENDYOL_MERCHANT_ID'] ?? '',
     trendyolApiKey: process.env['TRENDYOL_API_KEY'] ?? '',
     trendyolApiSecret: process.env['TRENDYOL_API_SECRET'] ?? '',
-    trendyolMock: process.env['TRENDYOL_MOCK'] === 'true' || !process.env['TRENDYOL_SELLER_ID'],
+    trendyolMock: process.env['TRENDYOL_MOCK'] === 'true' || !process.env['TRENDYOL_MERCHANT_ID'],
   };
 }
 
@@ -691,7 +691,7 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
 
 function createTrendyolClient(env: ApiEnv): TrendyolClient {
   return new TrendyolClient({
-    sellerId: env.trendyolSellerId,
+    sellerId: env.trendyolMerchantId,
     apiKey: env.trendyolApiKey,
     apiSecret: env.trendyolApiSecret,
     mock: env.trendyolMock,
