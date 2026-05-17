@@ -20,6 +20,7 @@ import {
   type GenerateDescriptionResponse,
   type GenerateHotspotsRequest,
   type GenerateHotspotsResponse,
+  type GeminiQaResult,
   type ProductAiAnalysis,
   type ProductAiCopy,
   type QualityCheckRequest,
@@ -36,7 +37,7 @@ import {
   SupabaseGenerationJobRepository,
   SupabaseProductRepository,
 } from '@minimalblock/data';
-import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator } from '@minimalblock/ai';
+import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa } from '@minimalblock/ai';
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import type { Database } from '@minimalblock/data';
 
@@ -219,7 +220,12 @@ async function uploadGeneratedModel(
   });
 }
 
-function createQualityReport(asset: MediaAsset, sourceImageCount: number): QualityReport {
+function createQualityReport(
+  asset: MediaAsset,
+  sourceImageCount: number,
+  qaResult?: GeminiQaResult,
+  isPrimitiveMesh?: boolean,
+): QualityReport {
   const warnings: string[] = [];
   if (sourceImageCount < 3) {
     warnings.push('Upload at least 3 source images to improve geometry accuracy.');
@@ -237,6 +243,9 @@ function createQualityReport(asset: MediaAsset, sourceImageCount: number): Quali
     hasUSDZ: false,
     arCompat: asset.mimeType === 'model/gltf-binary',
     warnings,
+    geminiQaScore: qaResult?.qualityScore,
+    geminiQaReport: qaResult,
+    isPrimitiveMesh: isPrimitiveMesh ?? false,
   });
 }
 
@@ -477,6 +486,36 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
           finishedAt: new Date(),
         }),
       );
+
+      if (generated.generatedPrimitive) {
+        const sourceImageUrls = sourceAssets.map((a) => a.url);
+        const visualQa = new GeminiVisualQa(createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID));
+        let qaResult: GeminiQaResult | undefined;
+        try {
+          qaResult = await visualQa.evaluate({
+            sourceImageUrls,
+            productCategory: product.category,
+            generatedPrimitive: generated.generatedPrimitive,
+          });
+        } catch {
+          // Visual QA failure is non-fatal — proceed without it
+        }
+        const quality = createQualityReport(outputAsset, sourceAssets.length, qaResult, true);
+        if (quality.score() < 40) {
+          const reason =
+            `Visual QA score ${quality.score()}/100 — primitive mesh does not represent the product adequately. ` +
+            (qaResult?.recommendedActions.join(' ') ?? 'Upload a manual GLB or regenerate with better source images.');
+          conversion = await conversionRepo.save(conversion.markFailed(reason));
+        } else {
+          conversion = await conversionRepo.save(conversion.markAwaitingApproval(outputAsset, quality));
+        }
+        return {
+          productId: product.id,
+          conversionId: conversion.id,
+          jobId: job.id,
+          status: conversion.status.value,
+        };
+      }
     }
 
     const quality = createQualityReport(outputAsset, sourceAssets.length);
@@ -577,11 +616,47 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
   const product = await getOwnedProduct(ctx, req.productId);
   const conversion = await getLatestConversionForProduct(ctx, product.id);
 
+  let qaRecommendations: string[] = conversion?.qualityReport?.geminiQaReport?.recommendedActions ?? [];
+
+  // If the stored quality report lacks a Gemini QA result but we have source assets
+  // and an output asset, try to re-run visual QA now (best-effort).
+  if (
+    conversion?.outputAsset &&
+    conversion.sourceAssets.length > 0 &&
+    conversion.qualityReport &&
+    conversion.qualityReport.geminiQaScore === undefined
+  ) {
+    try {
+      // We don't have the original shape params at this point, so we send a
+      // generic "primitive mesh" description via a simplified QA call.
+      const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+      const genericPrimitive = {
+        shape: 'box' as const,
+        widthM: 0.3,
+        heightM: 0.3,
+        depthM: 0.3,
+        baseColor: [0.8, 0.8, 0.8, 1.0] as [number, number, number, number],
+        roughness: 0.5,
+        metalness: 0.0,
+      };
+      const visualQa = new GeminiVisualQa(model);
+      const qaResult = await visualQa.evaluate({
+        sourceImageUrls: conversion.sourceAssets.map((a) => a.url),
+        productCategory: product.category,
+        generatedPrimitive: genericPrimitive,
+      });
+      qaRecommendations = qaResult.recommendedActions;
+    } catch {
+      // Non-fatal — fall through
+    }
+  }
+
   const recommendations = [
     ...(conversion?.sourceAssets.length && conversion.sourceAssets.length < 3
       ? ['Add more source angles before publishing to improve 3D fidelity.']
       : []),
     ...(conversion?.qualityReport?.warnings ?? []),
+    ...qaRecommendations,
   ];
   const readinessScore = conversion?.qualityReport?.score() ?? product.aiAnalysis?.readinessScore;
 

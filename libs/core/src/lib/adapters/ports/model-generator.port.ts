@@ -6,9 +6,20 @@ export interface GenerateModelInput {
   qualityHint?: 'fast' | 'balanced' | 'quality';
 }
 
+export interface GeneratedPrimitive {
+  shape: 'box' | 'cylinder' | 'sphere';
+  widthM: number;
+  heightM: number;
+  depthM: number;
+  baseColor: [number, number, number, number];
+  roughness: number;
+  metalness: number;
+}
+
 export interface GenerateModelOutput {
   outputAsset: MediaAsset;
   tokensUsed: number;
+  generatedPrimitive?: GeneratedPrimitive;
 }
 
 export interface IModelGeneratorPort {

@@ -448,6 +448,9 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             <Button variant="danger" onClick={() => setRejectOpen(true)}>Reject</Button>
           </>
         )}
+        {conversion.status.isFailed() && (
+          <Button variant="secondary" onClick={() => navigate('/upload')}>Regenerate</Button>
+        )}
         {downloadError && <p className="self-center text-xs text-red-600">{downloadError}</p>}
       </div>
 
@@ -509,11 +512,51 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
                 <span>{categoryLabel(product.category)}</span>
                 {conversion.outputAsset && <span>{(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>}
-                {qualityScore !== undefined && <span>Quality score: {qualityScore}</span>}
+                {qualityScore !== undefined && <span>Asset quality score: {qualityScore}/100</span>}
               </div>
               {conversion.errorMessage && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
               )}
+              {conversion.qualityReport?.geminiQaReport && (() => {
+                const qa = conversion.qualityReport.geminiQaReport!;
+                const score = conversion.qualityReport.score();
+                const isCritical = score < 40;
+                return (
+                  <div className={`mt-3 rounded-xl p-3 text-sm ${isCritical ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
+                    <p className="font-semibold">
+                      Visual QA: {score}/100 —{' '}
+                      <span className="font-normal">{qa.status.replace(/_/g, ' ')}</span>
+                    </p>
+                    <p className="mt-1 text-xs">
+                      Category match: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}
+                    </p>
+                    {qa.missingParts.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium">Missing parts:</p>
+                        <ul className={`mt-1 space-y-0.5 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                          {qa.missingParts.map((p) => <li key={p}>• {p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {qa.sourceImageIssues.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium">Source image issues:</p>
+                        <ul className={`mt-1 space-y-0.5 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                          {qa.sourceImageIssues.map((issue) => <li key={issue}>• {issue}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {qa.recommendedActions.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium">Recommended actions:</p>
+                        <ul className={`mt-1 space-y-0.5 text-xs font-medium ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>
+                          {qa.recommendedActions.map((action) => <li key={action}>→ {action}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

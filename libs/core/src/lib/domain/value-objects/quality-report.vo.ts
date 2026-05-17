@@ -1,3 +1,13 @@
+export interface GeminiQaResult {
+  conversionSucceeded: boolean;
+  qualityScore: number;
+  status: 'excellent' | 'good' | 'needs_improvement' | 'failed' | 'critical_failure';
+  categoryMatch: { score: number; reason: string };
+  missingParts: string[];
+  sourceImageIssues: string[];
+  recommendedActions: string[];
+}
+
 export interface QualityReportProps {
   fileSizeBytes: number;
   triangleCount: number;
@@ -5,6 +15,9 @@ export interface QualityReportProps {
   hasUSDZ: boolean;
   arCompat: boolean;
   warnings: string[];
+  geminiQaScore?: number;
+  geminiQaReport?: GeminiQaResult;
+  isPrimitiveMesh?: boolean;
 }
 
 // Snapshot of the post-generation validation result. Persisted as JSONB on
@@ -17,6 +30,9 @@ export class QualityReport {
   readonly hasUSDZ: boolean;
   readonly arCompat: boolean;
   readonly warnings: readonly string[];
+  readonly geminiQaScore: number | undefined;
+  readonly geminiQaReport: GeminiQaResult | undefined;
+  readonly isPrimitiveMesh: boolean;
 
   constructor(props: QualityReportProps) {
     this.fileSizeBytes = props.fileSizeBytes;
@@ -25,12 +41,40 @@ export class QualityReport {
     this.hasUSDZ = props.hasUSDZ;
     this.arCompat = props.arCompat;
     this.warnings = props.warnings;
+    this.geminiQaScore = props.geminiQaScore;
+    this.geminiQaReport = props.geminiQaReport;
+    this.isPrimitiveMesh = props.isPrimitiveMesh ?? false;
   }
 
-  // 0–100. Shopify's partner guidance targets ~4MB GLB and hard-fails at 15MB.
-  // Texture > 2048 and tris > 100k get progressively penalized. AR-incompat
-  // costs 20 points. Warnings cap the floor.
+  // 0–100 weighted score:
+  //   45% technical (file size, triangle count, texture, AR compat)
+  //   45% visual fidelity (Gemini QA score, when available)
+  //   10% source image readiness (penalised by upload warnings)
+  //
+  // When no Gemini QA score is present the technical score stands alone (legacy
+  // behaviour) so old records are not affected. A confirmed primitive mesh that
+  // scores below 3/10 on category match is hard-capped at 30.
   score(): number {
+    const technicalScore = this.#technicalScore();
+
+    if (this.geminiQaScore === undefined) {
+      return technicalScore;
+    }
+
+    const sourceWarningCount = this.warnings.filter((w) => w.toLowerCase().includes('source image')).length;
+    const sourceScore = Math.max(0, 100 - sourceWarningCount * 10);
+
+    const weighted = Math.round(0.45 * this.geminiQaScore + 0.45 * technicalScore + 0.10 * sourceScore);
+
+    const categoryScore = this.geminiQaReport?.categoryMatch?.score ?? 10;
+    if (this.isPrimitiveMesh && categoryScore < 3) {
+      return Math.min(weighted, 30);
+    }
+
+    return Math.max(0, Math.min(100, weighted));
+  }
+
+  #technicalScore(): number {
     let score = 100;
     if (this.fileSizeBytes > 15 * 1024 * 1024) score -= 60;
     else if (this.fileSizeBytes > 4 * 1024 * 1024) score -= 20;
@@ -51,6 +95,9 @@ export class QualityReport {
       hasUSDZ: this.hasUSDZ,
       arCompat: this.arCompat,
       warnings: [...this.warnings],
+      geminiQaScore: this.geminiQaScore,
+      geminiQaReport: this.geminiQaReport,
+      isPrimitiveMesh: this.isPrimitiveMesh,
     };
   }
 

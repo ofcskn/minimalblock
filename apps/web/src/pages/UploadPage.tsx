@@ -299,18 +299,42 @@ export function UploadPage({ user }: UploadPageProps) {
               </div>
             )}
 
-            {conversion.qualityReport && (
-              <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-medium">Quality score: {new QualityReport(conversion.qualityReport).score()}</p>
-                {conversion.qualityReport.warnings.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-xs text-amber-800">
-                    {conversion.qualityReport.warnings.map((warning) => (
-                      <li key={warning}>• {warning}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            {conversion.qualityReport && (() => {
+              const report = new QualityReport(conversion.qualityReport);
+              const score = report.score();
+              const isCritical = score < 40;
+              const qaReport = conversion.qualityReport.geminiQaReport;
+              return (
+                <div className={`rounded-xl p-3 text-sm ${isCritical ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
+                  <p className="font-medium">
+                    Asset quality score: {score}/100
+                    {qaReport && <span className="ml-2 font-normal text-xs">({qaReport.status.replace(/_/g, ' ')})</span>}
+                  </p>
+                  {qaReport?.categoryMatch && (
+                    <p className="mt-1 text-xs">
+                      Category match: {qaReport.categoryMatch.score}/10 — {qaReport.categoryMatch.reason}
+                    </p>
+                  )}
+                  {(conversion.qualityReport.warnings.length > 0 || (qaReport?.missingParts.length ?? 0) > 0) && (
+                    <ul className={`mt-2 space-y-1 text-xs ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>
+                      {conversion.qualityReport.warnings.map((warning) => (
+                        <li key={warning}>• {warning}</li>
+                      ))}
+                      {qaReport?.missingParts.map((part) => (
+                        <li key={part}>• Missing: {part}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {qaReport?.recommendedActions && qaReport.recommendedActions.length > 0 && (
+                    <ul className={`mt-2 space-y-1 text-xs font-medium ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>
+                      {qaReport.recommendedActions.map((action) => (
+                        <li key={action}>→ {action}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })()}
 
             {conversion.errorMessage && (
               <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
@@ -318,8 +342,11 @@ export function UploadPage({ user }: UploadPageProps) {
 
             <div className="flex flex-wrap justify-end gap-3">
               <Button variant="secondary" onClick={() => navigate('/')}>Back to gallery</Button>
-              <Button onClick={() => navigate(`/product/${conversion.id}`)}>
-                Open merchant review
+              <Button
+                onClick={() => navigate(`/product/${conversion.id}`)}
+                variant={conversion.status === 'failed' ? 'secondary' : 'primary'}
+              >
+                {conversion.status === 'failed' ? 'Review QA report' : 'Open merchant review'}
               </Button>
             </div>
           </div>

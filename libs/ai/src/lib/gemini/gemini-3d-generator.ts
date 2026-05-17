@@ -3,6 +3,8 @@ import type { GenerativeModel } from '@google/generative-ai';
 import { buildConvert2DTo3DPrompt } from '../prompts/convert-2d-to-3d.prompt.js';
 import type { QualityHint } from '../types/ai-request.types.js';
 import { buildGlbFromShape, type ShapeParams } from './glb-builder.js';
+// Re-export for convenience so callers can import from this module
+export type { ShapeParams };
 
 function parseShapeParams(raw: string): ShapeParams {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
@@ -83,6 +85,18 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
       sizeBytes: glb.byteLength,
     });
 
-    return { outputAsset, tokensUsed };
+    return {
+      outputAsset,
+      tokensUsed,
+      generatedPrimitive: {
+        shape: shapeParams.shape,
+        widthM: shapeParams.width,
+        heightM: shapeParams.height,
+        depthM: shapeParams.depth,
+        baseColor: shapeParams.baseColor,
+        roughness: shapeParams.roughness,
+        metalness: shapeParams.metalness,
+      },
+    };
   }
 }
