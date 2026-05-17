@@ -114,20 +114,12 @@ export function AppChrome({ children, onSignOut }: AppChromeProps) {
 
   const navigation = [
     {
-      id: 'workspace',
-      label: t('nav.workspace'),
+      id: 'main',
+      label: '',
       items: [
-        {
-          kind: 'group' as const,
-          id: 'catalog',
-          label: t('nav.catalog'),
-          icon: 'box' as const,
-          defaultOpen: true,
-          children: [
-            { kind: 'link' as const, id: 'gallery', label: t('nav.gallery'), href: '/' },
-            { kind: 'link' as const, id: 'upload-assets', label: t('nav.uploadAssets'), href: '/upload' },
-          ],
-        },
+        { kind: 'link' as const, id: 'home', label: 'Ana sayfa', href: '/', icon: 'home' as const },
+        { kind: 'link' as const, id: 'create-3d', label: '3D Oluştur', href: '/upload', icon: 'bolt' as const },
+        { kind: 'link' as const, id: 'brand', label: 'Marka Kimliği', href: '/brand', icon: 'tag' as const },
       ],
     },
   ];
