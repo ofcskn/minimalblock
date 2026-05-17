@@ -64,12 +64,21 @@ describe('gemini-client', () => {
 // ---------------------------------------------------------------------------
 
 describe('GeminiModelGenerator', () => {
-  const glbBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46]); // "glTF" magic bytes
-  const glbBase64 = Buffer.from(glbBytes).toString('base64');
+  const imageBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
+
+  const shapeParamsJson = JSON.stringify({
+    shape: 'box',
+    width: 0.3,
+    height: 0.4,
+    depth: 0.2,
+    baseColor: [0.8, 0.6, 0.4, 1.0],
+    roughness: 0.6,
+    metalness: 0.1,
+  });
 
   beforeEach(() => {
     global.fetch = jest.fn().mockResolvedValue({
-      arrayBuffer: () => Promise.resolve(glbBytes.buffer),
+      arrayBuffer: () => Promise.resolve(imageBytes.buffer),
     } as any);
   });
 
@@ -78,7 +87,7 @@ describe('GeminiModelGenerator', () => {
   });
 
   it('calls generateContent with a text prompt and inline image data', async () => {
-    const model = makeModel(glbBase64);
+    const model = makeModel(shapeParamsJson);
     const generator = new GeminiModelGenerator(model);
 
     await generator.generate({
@@ -95,7 +104,7 @@ describe('GeminiModelGenerator', () => {
   });
 
   it('returns outputAsset with gltf-binary mimeType and data URI', async () => {
-    const model = makeModel(glbBase64);
+    const model = makeModel(shapeParamsJson);
     const generator = new GeminiModelGenerator(model);
 
     const result = await generator.generate({
@@ -108,7 +117,7 @@ describe('GeminiModelGenerator', () => {
   });
 
   it('returns tokensUsed from usageMetadata', async () => {
-    const model = makeModel(glbBase64, 99);
+    const model = makeModel(shapeParamsJson, 99);
     const generator = new GeminiModelGenerator(model);
 
     const result = await generator.generate({
@@ -122,7 +131,7 @@ describe('GeminiModelGenerator', () => {
   it('defaults tokensUsed to 0 when usageMetadata is absent', async () => {
     const model = {
       generateContent: jest.fn().mockResolvedValue({
-        response: { text: () => glbBase64, usageMetadata: undefined },
+        response: { text: () => shapeParamsJson, usageMetadata: undefined },
       }),
     } as any;
     const generator = new GeminiModelGenerator(model);
@@ -136,7 +145,7 @@ describe('GeminiModelGenerator', () => {
   });
 
   it('includes quality hint in the prompt', async () => {
-    const model = makeModel(glbBase64);
+    const model = makeModel(shapeParamsJson);
     const generator = new GeminiModelGenerator(model);
 
     await generator.generate({
@@ -150,7 +159,7 @@ describe('GeminiModelGenerator', () => {
   });
 
   it('uses balanced quality when qualityHint is omitted', async () => {
-    const model = makeModel(glbBase64);
+    const model = makeModel(shapeParamsJson);
     const generator = new GeminiModelGenerator(model);
 
     await generator.generate({
@@ -163,7 +172,7 @@ describe('GeminiModelGenerator', () => {
   });
 
   it('sets sizeBytes on the output asset', async () => {
-    const model = makeModel(glbBase64);
+    const model = makeModel(shapeParamsJson);
     const generator = new GeminiModelGenerator(model);
 
     const result = await generator.generate({
@@ -171,24 +180,11 @@ describe('GeminiModelGenerator', () => {
       productCategory: 'furniture',
     });
 
-    expect(result.outputAsset.sizeBytes).toBe(glbBytes.byteLength);
+    expect(result.outputAsset.sizeBytes).toBeGreaterThan(0);
   });
 
-  it('accepts a data URI prefixed response from the model', async () => {
-    const dataUri = `data:model/gltf-binary;base64,${glbBase64}`;
-    const model = makeModel(dataUri);
-    const generator = new GeminiModelGenerator(model);
-
-    const result = await generator.generate({
-      sourceAsset: makeMediaAsset(),
-      productCategory: 'furniture',
-    });
-
-    expect(result.outputAsset.url).toContain(glbBase64);
-  });
-
-  it('accepts a markdown base64 code-fenced response', async () => {
-    const fenced = '```base64\n' + glbBase64 + '\n```';
+  it('accepts a markdown JSON code-fenced response', async () => {
+    const fenced = '```json\n' + shapeParamsJson + '\n```';
     const model = makeModel(fenced);
     const generator = new GeminiModelGenerator(model);
 
@@ -197,11 +193,11 @@ describe('GeminiModelGenerator', () => {
       productCategory: 'furniture',
     });
 
-    expect(result.outputAsset.url).toContain(glbBase64);
+    expect(result.outputAsset.url).toMatch(/^data:model\/gltf-binary;base64,/);
   });
 
-  it('accepts a plain code-fenced response (no language tag)', async () => {
-    const fenced = '```\n' + glbBase64 + '\n```';
+  it('accepts a plain code-fenced JSON response', async () => {
+    const fenced = '```\n' + shapeParamsJson + '\n```';
     const model = makeModel(fenced);
     const generator = new GeminiModelGenerator(model);
 
@@ -210,16 +206,16 @@ describe('GeminiModelGenerator', () => {
       productCategory: 'furniture',
     });
 
-    expect(result.outputAsset.url).toContain(glbBase64);
+    expect(result.outputAsset.url).toMatch(/^data:model\/gltf-binary;base64,/);
   });
 
-  it('throws a descriptive error when model returns non-base64 text', async () => {
+  it('throws a descriptive error when model returns non-JSON text', async () => {
     const model = makeModel("I'm sorry, I cannot generate 3D models.");
     const generator = new GeminiModelGenerator(model);
 
     await expect(
       generator.generate({ sourceAsset: makeMediaAsset(), productCategory: 'furniture' }),
-    ).rejects.toThrow(/Gemini did not return valid base64 GLB data/);
+    ).rejects.toThrow(/Gemini did not return valid shape parameter JSON/);
   });
 
   it('throws a descriptive error when model returns an empty string', async () => {
@@ -228,11 +224,11 @@ describe('GeminiModelGenerator', () => {
 
     await expect(
       generator.generate({ sourceAsset: makeMediaAsset(), productCategory: 'furniture' }),
-    ).rejects.toThrow(/Gemini did not return valid base64 GLB data/);
+    ).rejects.toThrow();
   });
 
-  it('prompt instructs model to return base64-encoded data', async () => {
-    const model = makeModel(glbBase64);
+  it('prompt instructs model to return JSON shape parameters', async () => {
+    const model = makeModel(shapeParamsJson);
     const generator = new GeminiModelGenerator(model);
 
     await generator.generate({
@@ -241,7 +237,7 @@ describe('GeminiModelGenerator', () => {
     });
 
     const [parts] = model.generateContent.mock.calls[0];
-    expect(parts[0].text).toContain('base64-encoded');
+    expect(parts[0].text).toContain('"shape"');
   });
 });
 

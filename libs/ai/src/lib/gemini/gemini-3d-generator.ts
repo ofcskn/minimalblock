@@ -2,30 +2,39 @@ import { IModelGeneratorPort, GenerateModelInput, GenerateModelOutput, MediaAsse
 import type { GenerativeModel } from '@google/generative-ai';
 import { buildConvert2DTo3DPrompt } from '../prompts/convert-2d-to-3d.prompt.js';
 import type { QualityHint } from '../types/ai-request.types.js';
+import { buildGlbFromShape, type ShapeParams } from './glb-builder.js';
 
-// Accepts: raw base64, data URI (data:model/gltf-binary;base64,<data>),
-// or markdown code-fenced base64 (```base64\n...\n```).
-// Throws a descriptive error when the string is not valid base64.
-function extractBase64(raw: string): string {
-  // Strip data URI prefix
-  const dataUriMatch = raw.match(/^data:[^;]+;base64,(.+)$/s);
-  if (dataUriMatch) return validateBase64(dataUriMatch[1].trim());
-
-  // Strip markdown code fences (``` or ```base64 / ```glb / ```binary)
-  const fenceMatch = raw.match(/^```[a-z0-9]*\s*([\s\S]+?)\s*```$/i);
-  if (fenceMatch) return validateBase64(fenceMatch[1].trim());
-
-  return validateBase64(raw);
-}
-
-function validateBase64(value: string): string {
-  if (value.length === 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
-    const preview = value.slice(0, 120).replace(/\n/g, '\\n');
-    throw new Error(
-      `Gemini did not return valid base64 GLB data. Response preview: "${preview}"`,
-    );
+function parseShapeParams(raw: string): ShapeParams {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const preview = raw.slice(0, 120).replace(/\n/g, '\\n');
+    throw new Error(`Gemini did not return valid shape parameter JSON. Response preview: "${preview}"`);
   }
-  return value;
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Gemini returned non-object shape parameters');
+  }
+
+  const p = parsed as Record<string, unknown>;
+  const shape = p['shape'] as string;
+  if (shape !== 'box' && shape !== 'cylinder' && shape !== 'sphere') {
+    throw new Error(`Gemini returned invalid shape: "${shape}"`);
+  }
+
+  return {
+    shape: shape as 'box' | 'cylinder' | 'sphere',
+    width:    typeof p['width']    === 'number' ? p['width']    : 0.3,
+    height:   typeof p['height']   === 'number' ? p['height']   : 0.3,
+    depth:    typeof p['depth']    === 'number' ? p['depth']    : 0.3,
+    baseColor: (Array.isArray(p['baseColor']) && p['baseColor'].length >= 4
+      ? (p['baseColor'] as number[]).slice(0, 4) as [number, number, number, number]
+      : [0.8, 0.8, 0.8, 1.0]),
+    roughness: typeof p['roughness'] === 'number' ? p['roughness'] : 0.5,
+    metalness: typeof p['metalness'] === 'number' ? p['metalness'] : 0.0,
+  };
 }
 
 export class GeminiModelGenerator implements IModelGeneratorPort {
@@ -55,20 +64,23 @@ export class GeminiModelGenerator implements IModelGeneratorPort {
     ]);
 
     const tokensUsed = result.response.usageMetadata?.totalTokenCount ?? 0;
-
-    // Text models return base64 in their text response; strip any wrapping the model adds.
     const raw = result.response.text().trim();
-    const glbBase64 = extractBase64(raw);
+    const shapeParams = parseShapeParams(raw);
 
-    const glbBytes = Uint8Array.from(atob(glbBase64), (value) => value.charCodeAt(0));
+    const glb = buildGlbFromShape(shapeParams);
 
-    // Return base64 encoded GLB; the caller (app layer) handles storage upload
+    let glbBinary = '';
+    for (let i = 0; i < glb.byteLength; i += 1) {
+      glbBinary += String.fromCharCode(glb[i]);
+    }
+    const glbBase64 = btoa(glbBinary);
+
     const outputAsset = new MediaAsset({
       url: `data:model/gltf-binary;base64,${glbBase64}`,
       storageKey: '',
       mimeType: 'model/gltf-binary',
       kind: 'generated-model',
-      sizeBytes: glbBytes.byteLength,
+      sizeBytes: glb.byteLength,
     });
 
     return { outputAsset, tokensUsed };
