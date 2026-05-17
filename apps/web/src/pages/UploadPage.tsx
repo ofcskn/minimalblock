@@ -336,7 +336,7 @@ export function UploadPage({ user }: UploadPageProps) {
               );
             })()}
 
-            {conversion.errorMessage && (
+            {conversion.errorMessage && !conversion.qualityReport?.geminiQaReport && (
               <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
             )}
 

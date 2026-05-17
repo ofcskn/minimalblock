@@ -502,16 +502,12 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
         }
         const quality = createQualityReport(outputAsset, sourceAssets.length, qaResult, true);
         if (quality.score() < 40) {
-          const actions = qaResult?.recommendedActions.length
-            ? qaResult.recommendedActions.join(' ')
-            : 'Upload a manual GLB or regenerate with better source images.';
           const categoryNote =
             qaResult?.categoryMatch && qaResult.categoryMatch.score < 3
-              ? ` Category: ${qaResult.categoryMatch.reason}`
+              ? ` ${qaResult.categoryMatch.reason}`
               : '';
-          const reason =
-            `Visual QA score ${quality.score()}/100 — the generated primitive does not adequately represent this product.${categoryNote} ${actions}`.trim();
-          conversion = await conversionRepo.save(conversion.markFailed(reason));
+          const reason = `Visual QA score ${quality.score()}/100 — primitive mesh does not adequately represent this product.${categoryNote}`.trimEnd();
+          conversion = await conversionRepo.save(conversion.markFailed(reason, quality));
         } else {
           conversion = await conversionRepo.save(conversion.markAwaitingApproval(outputAsset, quality));
         }

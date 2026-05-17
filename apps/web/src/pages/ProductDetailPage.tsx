@@ -514,7 +514,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                 {conversion.outputAsset && <span>{(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>}
                 {qualityScore !== undefined && <span>Asset quality score: {qualityScore}/100</span>}
               </div>
-              {conversion.errorMessage && (
+              {conversion.errorMessage && !conversion.qualityReport?.geminiQaReport && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
               )}
               {conversion.qualityReport?.geminiQaReport && (() => {
