@@ -13,6 +13,8 @@ export interface Hotspot {
   type?: SuggestedHotspotType;
   position?: string;
   normal?: string;
+  /** F.5 — seller-approved for public display */
+  approved?: boolean;
 }
 
 export interface SuggestedHotspot {
@@ -202,5 +204,35 @@ export class Product {
       ),
       updatedAt: new Date(),
     });
+  }
+
+  // Phase 6 — Hotspot QA and Editor
+
+  /** F.2/F.3/F.4/F.5 — update label, description, type, or approved on a single hotspot */
+  withHotspotUpdate(id: string, patch: Partial<Omit<Hotspot, 'id'>>): Product {
+    return new Product({
+      ...this,
+      hotspots: this.hotspots.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+      updatedAt: new Date(),
+    });
+  }
+
+  /** F.5 — toggle approval for a hotspot */
+  withHotspotApproved(id: string, approved: boolean): Product {
+    return this.withHotspotUpdate(id, { approved });
+  }
+
+  /** F.6 — remove a hotspot by id */
+  withHotspotRemoved(id: string): Product {
+    return new Product({
+      ...this,
+      hotspots: this.hotspots.filter((h) => h.id !== id),
+      updatedAt: new Date(),
+    });
+  }
+
+  /** F.15 — true when every hotspot carries an explicit seller approval */
+  allHotspotsApproved(): boolean {
+    return this.hotspots.length > 0 && this.hotspots.every((h) => h.approved === true);
   }
 }
