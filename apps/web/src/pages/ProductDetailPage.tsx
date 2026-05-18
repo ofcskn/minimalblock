@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Conversion,
   ConversionStatus,
+  HotspotQuality,
   MediaAsset,
   PRODUCT_CATEGORIES,
   ProductWorkflowStatus,
@@ -16,7 +17,7 @@ import {
   type Product,
   type ProductCategory,
 } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, type ModelViewerHandle } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, HotspotEditorPanel, type ModelViewerHandle } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -215,6 +216,14 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
   function removeHotspot(hotspotId: string) {
     setHotspots((current) => current.filter((hotspot) => hotspot.id !== hotspotId));
+  }
+
+  function updateHotspot(id: string, patch: Partial<Omit<Hotspot, 'id'>>) {
+    setHotspots((current) => current.map((h) => (h.id === id ? { ...h, ...patch } : h)));
+  }
+
+  function toggleHotspotApproval(id: string, approved: boolean) {
+    updateHotspot(id, { approved });
   }
 
   async function saveHotspots() {
@@ -1001,21 +1010,27 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         </div>
       </div>
 
-      {editMode && hotspots.length > 0 && (
-        <Card>
-          <p className="mb-3 text-sm font-medium text-gray-700">Hotspots ({hotspots.length})</p>
-          <ul className="space-y-2">
-            {hotspots.map((hotspot) => (
-              <li key={hotspot.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                <div>
-                  <span className="text-gray-900">{hotspot.label}</span>
-                  {!hotspot.position && <span className="ml-2 text-xs text-amber-600">Needs placement</span>}
-                </div>
-                <button onClick={() => removeHotspot(hotspot.id)} className="text-xs text-red-500 hover:text-red-700">Remove</button>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      {editMode && (
+        <HotspotEditorPanel
+          hotspots={hotspots}
+          category={product?.category}
+          onUpdate={updateHotspot}
+          onDelete={removeHotspot}
+          onApprovalToggle={toggleHotspotApproval}
+          onValidate={() => {
+            const reports = HotspotQuality.validateAll(hotspots, product?.category);
+            const invalidCount = reports.filter((r) => r.status === 'invalid').length;
+            const warningCount = reports.filter((r) => r.status === 'warning').length;
+            if (invalidCount === 0 && warningCount === 0) {
+              setError(null);
+            } else {
+              setError(`Hotspot QA: ${invalidCount} invalid, ${warningCount} with warnings. Fix issues before publishing.`);
+            }
+          }}
+          onGenerateBetter={() => runAiAction('hotspots')}
+          generatingHotspots={busyAction === 'hotspots'}
+          publishBlocked={HotspotQuality.hasInvalidHotspots(hotspots, product?.category)}
+        />
       )}
 
       <Modal open={!!pendingHotspot} onClose={() => setPendingHotspot(null)} title="Name this hotspot">

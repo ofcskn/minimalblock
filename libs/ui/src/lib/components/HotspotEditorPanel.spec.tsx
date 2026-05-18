@@ -130,7 +130,7 @@ describe('HotspotEditorPanel', () => {
           onApprovalToggle={noop}
         />,
       );
-      expect(screen.getByText(/warning/)).toBeDefined();
+      expect(screen.getByText('1 warning')).toBeDefined();
     });
   });
 
@@ -209,7 +209,7 @@ describe('HotspotEditorPanel', () => {
     });
 
     it('calls onUpdate with new label when saving', () => {
-      const onUpdate = vi.fn();
+      const onUpdate = jest.fn();
       render(
         <HotspotEditorPanel
           hotspots={[makeHotspot({ label: 'Old Label' })]}
