@@ -1,3 +1,5 @@
+import type { SceneGraph, ScenePart } from '../types/scene-graph.types.js';
+
 export interface ShapeParams {
   shape: 'box' | 'cylinder' | 'sphere';
   width: number;
@@ -9,7 +11,7 @@ export interface ShapeParams {
 }
 
 export interface PartDef {
-  shape: 'box' | 'cylinder' | 'sphere';
+  shape: 'box' | 'cylinder' | 'sphere' | 'tapered-cylinder' | 'frustum' | 'wedge' | 'torus' | 'extruded-ellipse';
   width: number;
   height: number;
   depth: number;
@@ -20,6 +22,23 @@ export interface PartDef {
   /** Rotation as quaternion [x, y, z, w] in glTF convention. */
   quaternion?: [number, number, number, number];
   description?: string;
+  /** Frustum: top face dimensions (defaults to width/depth if omitted). */
+  topWidth?: number;
+  topDepth?: number;
+  /** Tapered cylinder: overrides computed radii. */
+  radiusBottom?: number;
+  radiusTop?: number;
+  /** Torus: tube radius. width/2 = major radius. */
+  tubeRadius?: number;
+  /** Extruded ellipse: Y semi-axis. height = X semi-axis, depth = extrusion length. */
+  ry?: number;
+  /** Tessellation override (segments for cylinder/torus/ellipse). */
+  segments?: number;
+  /** Smooth shading — average normals at shared vertices. */
+  smooth?: boolean;
+  /** Transmission factor for glass-like materials (0–1). */
+  transmissionFactor?: number;
+  emissiveFactor?: [number, number, number];
 }
 
 interface Geometry {
@@ -133,13 +152,256 @@ function buildSphereGeometry(diameter: number, lat = 12, lon = 16): Geometry {
   return { positions, normals, uvs, indices };
 }
 
+// ─── Vector helpers ───────────────────────────────────────────────────────────
+
+function v3cross(a: [number,number,number], b: [number,number,number]): [number,number,number] {
+  return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+}
+
+function v3norm(v: [number,number,number]): [number,number,number] {
+  const len = Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) || 1;
+  return [v[0]/len, v[1]/len, v[2]/len];
+}
+
+function faceNormal(p0: number[], p1: number[], p2: number[]): [number,number,number] {
+  const a: [number,number,number] = [p1[0]-p0[0], p1[1]-p0[1], p1[2]-p0[2]];
+  const b: [number,number,number] = [p2[0]-p0[0], p2[1]-p0[1], p2[2]-p0[2]];
+  return v3norm(v3cross(a, b));
+}
+
+// ─── New geometry builders ────────────────────────────────────────────────────
+
+/**
+ * Frustum (truncated pyramid): bottom is w×d, top is topW×topD, height is h.
+ * All geometry centered at origin (Y: -h/2 to +h/2).
+ */
+function buildFrustumGeometry(w: number, h: number, d: number, topW: number, topD: number): Geometry {
+  const hw = w/2, hh = h/2, hd = d/2;
+  const tw = topW/2, td = topD/2;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  function addQuad(p0: number[], p1: number[], p2: number[], p3: number[], u0=0, u1=1) {
+    const n = faceNormal(p0, p1, p2);
+    const base = positions.length / 3;
+    for (const p of [p0, p1, p2, p3]) positions.push(p[0], p[1], p[2]);
+    for (let i = 0; i < 4; i++) normals.push(n[0], n[1], n[2]);
+    uvs.push(u0,0, u1,0, u1,1, u0,1);
+    indices.push(base, base+1, base+2, base, base+2, base+3);
+  }
+
+  // Bottom face (normal down)
+  addQuad([-hw,-hh,-hd],[hw,-hh,-hd],[hw,-hh,hd],[-hw,-hh,hd]);
+  // Top face (normal up)
+  addQuad([-tw,hh,-td],[hw>tw?tw:tw,hh,-td],[tw,hh,td],[-tw,hh,td]);
+  const topFaceN = faceNormal([-tw,hh,-td],[tw,hh,-td],[tw,hh,td]);
+  // Fix top face normal to always point up
+  const lastBase = (positions.length / 3) - 4;
+  for (let i = 0; i < 4; i++) { normals[lastBase*3+i*3] = 0; normals[lastBase*3+i*3+1] = 1; normals[lastBase*3+i*3+2] = 0; }
+  void topFaceN;
+  // Front face (+Z)
+  addQuad([-hw,-hh,hd],[hw,-hh,hd],[tw,hh,td],[-tw,hh,td]);
+  // Back face (-Z)
+  addQuad([hw,-hh,-hd],[-hw,-hh,-hd],[-tw,hh,-td],[tw,hh,-td]);
+  // Right face (+X)
+  addQuad([hw,-hh,hd],[hw,-hh,-hd],[tw,hh,-td],[tw,hh,td]);
+  // Left face (-X)
+  addQuad([-hw,-hh,-hd],[-hw,-hh,hd],[-tw,hh,td],[-tw,hh,-td]);
+
+  return { positions, normals, uvs, indices };
+}
+
+/**
+ * Tapered cylinder: rBottom at bottom, rTop at top.
+ * Centered at origin. Height along Y.
+ */
+function buildTaperedCylinderGeometry(rBottom: number, rTop: number, h: number, segments = 20): Geometry {
+  const hh = h / 2;
+  const dr = rTop - rBottom;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  // Side
+  for (let i = 0; i < segments; i++) {
+    const t0 = (i / segments) * 2 * Math.PI;
+    const t1 = ((i+1) / segments) * 2 * Math.PI;
+    const c0 = Math.cos(t0), s0 = Math.sin(t0);
+    const c1 = Math.cos(t1), s1 = Math.sin(t1);
+    // Normals: outward and tilted based on taper (N = normalize(h*cosθ, -dr, h*sinθ))
+    const sn0 = v3norm([h*c0, -dr, h*s0]);
+    const sn1 = v3norm([h*c1, -dr, h*s1]);
+    const base = positions.length / 3;
+    positions.push(rBottom*c0,-hh,rBottom*s0, rBottom*c1,-hh,rBottom*s1, rTop*c1,hh,rTop*s1, rTop*c0,hh,rTop*s0);
+    normals.push(sn0[0],sn0[1],sn0[2], sn1[0],sn1[1],sn1[2], sn1[0],sn1[1],sn1[2], sn0[0],sn0[1],sn0[2]);
+    uvs.push(i/segments,0, (i+1)/segments,0, (i+1)/segments,1, i/segments,1);
+    indices.push(base, base+1, base+2, base, base+2, base+3);
+  }
+
+  // Top cap
+  if (rTop > 0.0001) {
+    const topCenter = positions.length / 3;
+    positions.push(0, hh, 0); normals.push(0,1,0); uvs.push(0.5,0.5);
+    for (let i = 0; i < segments; i++) {
+      const t0 = (i/segments)*2*Math.PI, t1 = ((i+1)/segments)*2*Math.PI;
+      const base = positions.length / 3;
+      positions.push(rTop*Math.cos(t0),hh,rTop*Math.sin(t0), rTop*Math.cos(t1),hh,rTop*Math.sin(t1));
+      normals.push(0,1,0, 0,1,0);
+      uvs.push(Math.cos(t0)*.5+.5,Math.sin(t0)*.5+.5, Math.cos(t1)*.5+.5,Math.sin(t1)*.5+.5);
+      indices.push(topCenter, base+1, base);
+    }
+  }
+
+  // Bottom cap
+  if (rBottom > 0.0001) {
+    const botCenter = positions.length / 3;
+    positions.push(0, -hh, 0); normals.push(0,-1,0); uvs.push(0.5,0.5);
+    for (let i = 0; i < segments; i++) {
+      const t0 = (i/segments)*2*Math.PI, t1 = ((i+1)/segments)*2*Math.PI;
+      const base = positions.length / 3;
+      positions.push(rBottom*Math.cos(t0),-hh,rBottom*Math.sin(t0), rBottom*Math.cos(t1),-hh,rBottom*Math.sin(t1));
+      normals.push(0,-1,0, 0,-1,0);
+      uvs.push(Math.cos(t0)*.5+.5,Math.sin(t0)*.5+.5, Math.cos(t1)*.5+.5,Math.sin(t1)*.5+.5);
+      indices.push(botCenter, base, base+1);
+    }
+  }
+
+  return { positions, normals, uvs, indices };
+}
+
+/**
+ * Torus: major circle in the XZ plane (Y-up).
+ * majorRadius = distance from center to tube center; tubeRadius = tube cross-section radius.
+ */
+function buildTorusGeometry(majorRadius: number, tubeRadius: number, majorSegments = 24, tubeSegments = 12): Geometry {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= majorSegments; i++) {
+    const theta = (i / majorSegments) * 2 * Math.PI;
+    const cosT = Math.cos(theta), sinT = Math.sin(theta);
+    for (let j = 0; j <= tubeSegments; j++) {
+      const phi = (j / tubeSegments) * 2 * Math.PI;
+      const cosP = Math.cos(phi), sinP = Math.sin(phi);
+      const x = (majorRadius + tubeRadius * cosP) * cosT;
+      const y = tubeRadius * sinP;
+      const z = (majorRadius + tubeRadius * cosP) * sinT;
+      positions.push(x, y, z);
+      // Outward normal from tube center
+      normals.push(cosP * cosT, sinP, cosP * sinT);
+      uvs.push(i / majorSegments, j / tubeSegments);
+    }
+  }
+
+  const stride = tubeSegments + 1;
+  for (let i = 0; i < majorSegments; i++) {
+    for (let j = 0; j < tubeSegments; j++) {
+      const a = i * stride + j;
+      const b = (i + 1) * stride + j;
+      indices.push(a, b, b+1, a, b+1, a+1);
+    }
+  }
+
+  return { positions, normals, uvs, indices };
+}
+
+/**
+ * Extruded ellipse: ellipse with X semi-axis rx and Y semi-axis ry, extruded along Z by depth.
+ * Centered at origin.
+ */
+function buildExtrudedEllipseGeometry(rx: number, ry: number, depth: number, segments = 24): Geometry {
+  const hd = depth / 2;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  // Side
+  for (let i = 0; i < segments; i++) {
+    const t0 = (i / segments) * 2 * Math.PI;
+    const t1 = ((i+1) / segments) * 2 * Math.PI;
+    const x0 = rx*Math.cos(t0), y0 = ry*Math.sin(t0);
+    const x1 = rx*Math.cos(t1), y1 = ry*Math.sin(t1);
+    // Ellipse outward normal: (y/rx², x/ry²)... wait: d/dθ of (rx*cosθ, ry*sinθ) is (-rx*sinθ, ry*cosθ)
+    // Normal perpendicular: (ry*cosθ, rx*sinθ) normalized  → (cosθ/rx, sinθ/ry) normalized
+    const nn0 = v3norm([Math.cos(t0)/rx, Math.sin(t0)/ry, 0] as [number,number,number]);
+    const nn1 = v3norm([Math.cos(t1)/rx, Math.sin(t1)/ry, 0] as [number,number,number]);
+    const base = positions.length / 3;
+    positions.push(x0,-hd,y0, x1,-hd,y1, x1,hd,y1, x0,hd,y0);
+    normals.push(nn0[0],0,nn0[1], nn1[0],0,nn1[1], nn1[0],0,nn1[1], nn0[0],0,nn0[1]);
+    uvs.push(i/segments,0, (i+1)/segments,0, (i+1)/segments,1, i/segments,1);
+    indices.push(base, base+1, base+2, base, base+2, base+3);
+  }
+
+  // Front cap (+Z) — fan from center
+  const frontCenter = positions.length / 3;
+  positions.push(0, hd, 0); normals.push(0,0,1); uvs.push(0.5,0.5);
+  for (let i = 0; i < segments; i++) {
+    const t0 = (i/segments)*2*Math.PI, t1 = ((i+1)/segments)*2*Math.PI;
+    const base = positions.length / 3;
+    positions.push(rx*Math.cos(t0),hd,ry*Math.sin(t0), rx*Math.cos(t1),hd,ry*Math.sin(t1));
+    normals.push(0,0,1, 0,0,1);
+    uvs.push(Math.cos(t0)*.5+.5,Math.sin(t0)*.5+.5, Math.cos(t1)*.5+.5,Math.sin(t1)*.5+.5);
+    indices.push(frontCenter, base, base+1);
+  }
+
+  // Back cap (-Z)
+  const backCenter = positions.length / 3;
+  positions.push(0, -hd, 0); normals.push(0,0,-1); uvs.push(0.5,0.5);
+  for (let i = 0; i < segments; i++) {
+    const t0 = (i/segments)*2*Math.PI, t1 = ((i+1)/segments)*2*Math.PI;
+    const base = positions.length / 3;
+    positions.push(rx*Math.cos(t0),-hd,ry*Math.sin(t0), rx*Math.cos(t1),-hd,ry*Math.sin(t1));
+    normals.push(0,0,-1, 0,0,-1);
+    uvs.push(Math.cos(t0)*.5+.5,Math.sin(t0)*.5+.5, Math.cos(t1)*.5+.5,Math.sin(t1)*.5+.5);
+    indices.push(backCenter, base+1, base);
+  }
+
+  return { positions, normals, uvs, indices };
+}
+
 function buildGeometry(part: PartDef | ShapeParams): Geometry {
   const w = Math.max(part.width, 0.001);
   const h = Math.max(part.height, 0.001);
   const d = Math.max(part.depth, 0.001);
-  if (part.shape === 'cylinder') return buildCylinderGeometry(w, h);
-  if (part.shape === 'sphere')   return buildSphereGeometry(w);
-  return buildBoxGeometry(w, h, d);
+  const pd = part as PartDef;
+  const segs = pd.segments;
+
+  switch (part.shape) {
+    case 'cylinder':
+      return buildCylinderGeometry(w, h, segs ?? 16);
+    case 'sphere':
+      return buildSphereGeometry(w);
+    case 'tapered-cylinder': {
+      const rBot = pd.radiusBottom ?? w / 2;
+      const rTop = pd.radiusTop   ?? 0;
+      return buildTaperedCylinderGeometry(rBot, rTop, h, segs ?? 20);
+    }
+    case 'frustum': {
+      const topW = pd.topWidth  ?? w * 0.6;
+      const topD = pd.topDepth  ?? d * 0.6;
+      return buildFrustumGeometry(w, h, d, topW, topD);
+    }
+    case 'wedge':
+      // Wedge = frustum with zero-width top
+      return buildFrustumGeometry(w, h, d, 0.001, d);
+    case 'torus': {
+      const maj = w / 2;
+      const tube = pd.tubeRadius ?? maj * 0.35;
+      return buildTorusGeometry(maj, tube, segs ?? 24, 12);
+    }
+    case 'extruded-ellipse': {
+      const ry = pd.ry ?? h / 2;
+      return buildExtrudedEllipseGeometry(w / 2, ry, d, segs ?? 24);
+    }
+    default:
+      return buildBoxGeometry(w, h, d);
+  }
 }
 
 function calcMinMax(arr: number[], stride: number): { min: number[]; max: number[] } {
@@ -557,6 +819,82 @@ export function buildProductTypeParts(detectedType: string, params: ShapeParams)
   }
 }
 
+// ─── Scene graph → PartDef conversion ────────────────────────────────────────
+
+function scenePartToPartDef(part: ScenePart): PartDef {
+  const { dimensions: dim, material: mat } = part;
+  const def: PartDef = {
+    shape:    part.shape,
+    width:    dim.width,
+    height:   dim.height,
+    depth:    dim.depth,
+    baseColor: mat.baseColor,
+    roughness: mat.roughness,
+    metalness: mat.metalness,
+    translation: part.position,
+    quaternion:  part.rotation,
+    description: part.label,
+    smooth:    part.smooth,
+    segments:  part.segments,
+    transmissionFactor: mat.transmissionFactor,
+    emissiveFactor:     mat.emissiveFactor,
+  };
+
+  // Shape-specific dimension fields
+  if (part.shape === 'frustum' || part.shape === 'wedge') {
+    if (dim.topWidth  != null) def.topWidth  = dim.topWidth;
+    if (dim.topDepth  != null) def.topDepth  = dim.topDepth;
+  }
+  if (part.shape === 'tapered-cylinder') {
+    if (dim.radiusBottom != null) def.radiusBottom = dim.radiusBottom;
+    if (dim.radiusTop    != null) def.radiusTop    = dim.radiusTop;
+  }
+  if (part.shape === 'torus') {
+    if (dim.tubeRadius != null)  def.tubeRadius  = dim.tubeRadius;
+    if (dim.majorRadius != null) def.width = dim.majorRadius * 2;
+  }
+  if (part.shape === 'extruded-ellipse') {
+    if (dim.ry != null) def.ry = dim.ry;
+  }
+
+  return def;
+}
+
+function mirrorPartDef(def: PartDef, axis: 'x' | 'z'): PartDef {
+  const mirrored = { ...def };
+  if (def.translation) {
+    const t = [...def.translation] as [number, number, number];
+    if (axis === 'x') t[0] = -t[0];
+    if (axis === 'z') t[2] = -t[2];
+    mirrored.translation = t;
+  }
+  if (def.quaternion) {
+    const q = [...def.quaternion] as [number, number, number, number];
+    // Mirror the rotation quaternion across the axis
+    if (axis === 'x') { q[1] = -q[1]; q[2] = -q[2]; }
+    if (axis === 'z') { q[0] = -q[0]; q[1] = -q[1]; }
+    mirrored.quaternion = q;
+  }
+  mirrored.description = (def.description ?? '') + ' (mirrored)';
+  return mirrored;
+}
+
+/**
+ * Convert a SceneGraph (v2 pipeline output) into PartDef[] for buildCompoundGlb().
+ * Handles symmetryMirror auto-duplication.
+ */
+export function sceneGraphToPartDefs(graph: SceneGraph): PartDef[] {
+  const result: PartDef[] = [];
+  for (const part of graph.parts) {
+    const def = scenePartToPartDef(part);
+    result.push(def);
+    if (part.symmetryMirror) {
+      result.push(mirrorPartDef(def, part.symmetryMirror));
+    }
+  }
+  return result;
+}
+
 // ─── GLB encoding ─────────────────────────────────────────────────────────────
 
 export function buildGlbFromShape(params: ShapeParams): Uint8Array {
@@ -617,10 +955,12 @@ export function buildGlbFromShape(params: ShapeParams): Uint8Array {
   return encodeGlb(gltfJson, binData);
 }
 
+const LEGACY_SHAPES = new Set<string>(['box', 'cylinder', 'sphere']);
+
 export function buildCompoundGlb(parts: PartDef[]): Uint8Array {
   if (parts.length === 0) throw new Error('buildCompoundGlb: no parts provided');
-  if (parts.length === 1 && !parts[0].translation && !parts[0].quaternion) {
-    return buildGlbFromShape(parts[0]);
+  if (parts.length === 1 && !parts[0].translation && !parts[0].quaternion && LEGACY_SHAPES.has(parts[0].shape)) {
+    return buildGlbFromShape(parts[0] as ShapeParams);
   }
 
   const geometries = parts.map(buildGeometry);
@@ -678,7 +1018,15 @@ export function buildCompoundGlb(parts: PartDef[]): Uint8Array {
       { bufferView: bb+3, byteOffset: 0, componentType: 5123, count: ic, type: 'SCALAR' },
     );
     meshes.push({ primitives: [{ attributes: { POSITION: ab, NORMAL: ab+1, TEXCOORD_0: ab+2 }, indices: ab+3, material: i }] });
-    materials.push({ pbrMetallicRoughness: { baseColorFactor: p.baseColor, metallicFactor: p.metalness, roughnessFactor: p.roughness }, doubleSided: false });
+    const matDef: Record<string, unknown> = {
+      pbrMetallicRoughness: { baseColorFactor: p.baseColor, metallicFactor: p.metalness, roughnessFactor: p.roughness },
+      doubleSided: false,
+    };
+    if ((p as PartDef).transmissionFactor != null) {
+      matDef['extensions'] = { KHR_materials_transmission: { transmissionFactor: (p as PartDef).transmissionFactor } };
+    }
+    if ((p as PartDef).emissiveFactor) matDef['emissiveFactor'] = (p as PartDef).emissiveFactor;
+    materials.push(matDef);
 
     const node: Record<string, unknown> = { mesh: i };
     if (p.translation) node['translation'] = p.translation;

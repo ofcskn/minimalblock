@@ -48,7 +48,7 @@ import {
   SupabaseGenerationJobRepository,
   SupabaseProductRepository,
 } from '@minimalblock/data';
-import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa, buildTrendyolListingPrompt } from '@minimalblock/ai';
+import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa, buildTrendyolListingPrompt, GenerationFeedbackService } from '@minimalblock/ai';
 import { TrendyolClient } from '@minimalblock/trendyol';
 import { ProductImportService } from './product-import.service.js';
 import type {
@@ -742,11 +742,19 @@ async function createConversionForProduct(
         }),
       );
     } else {
-      const generator = new GeminiModelGenerator(createGenerativeModel(ctx.env.geminiApiKey));
+      const generator = new GeminiModelGenerator(
+        createGenerativeModel(ctx.env.geminiApiKey),
+        createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID),
+      );
       const generated = await generator.generate({
-        sourceAsset: sourceAssets[0],
-        productCategory: product.category,
-        qualityHint: req.qualityHint,
+        sourceAsset:              sourceAssets[0],
+        sourceAssets:             sourceAssets,
+        productCategory:          product.category,
+        qualityHint:              req.qualityHint,
+        productTitle:             product.name,
+        productDimensions:        product.importData?.fields?.dimensions?.value ?? undefined,
+        inferredMaterialFinish:   product.importData?.inferredMaterialFinish ?? undefined,
+        inferredGeometryComplexity: product.importData?.inferredGeometryComplexity ?? undefined,
       });
       outputAsset = await uploadGeneratedModel(ctx.admin, ctx.user.id, generated.outputAsset, product.name);
       job = await jobRepo.save(
@@ -858,6 +866,16 @@ async function handleApproveConversion(ctx: RequestContext, conversionId: string
   const approved = await conversionRepo.save(conversion.approve(ctx.user.id));
   await eventsRepo.track(approved.productId, ctx.user.id, 'conversion_approved');
   await eventsRepo.track(approved.productId, ctx.user.id, 'product_published');
+
+  // Phase I: Record approval signal for feedback loop
+  await new GenerationFeedbackService(ctx.admin, ctx.user.id)
+    .recordApproval(
+      approved.productId,
+      approved.id,
+      undefined,
+      typeof approved.qualityReport?.geminiQaScore === 'number' ? approved.qualityReport.geminiQaScore : undefined,
+    ).catch(() => { /* non-fatal */ });
+
   return { conversion: toConversionSnapshot(approved) };
 }
 
@@ -871,6 +889,15 @@ async function handleRejectConversion(
   const conversion = await getOwnedConversion(ctx, conversionId);
   const rejected = await conversionRepo.save(conversion.reject(req.reason));
   await eventsRepo.track(rejected.productId, ctx.user.id, 'conversion_rejected', { reason: req.reason });
+
+  // Phase I: Record rejection signal for feedback loop
+  await new GenerationFeedbackService(ctx.admin, ctx.user.id)
+    .recordRejection(
+      rejected.productId,
+      rejected.id,
+      req.reason ?? 'no reason given',
+    ).catch(() => { /* non-fatal */ });
+
   return { conversion: toConversionSnapshot(rejected) };
 }
 
