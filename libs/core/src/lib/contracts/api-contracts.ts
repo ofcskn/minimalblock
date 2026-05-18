@@ -8,7 +8,7 @@ import type {
 import type { ConversionStatusValue } from '../domain/value-objects/conversion-status.vo.js';
 import type { MediaAssetProps, MediaAssetType } from '../domain/value-objects/media-asset.vo.js';
 import type { QualityReportProps } from '../domain/value-objects/quality-report.vo.js';
-import type { ProviderId } from '../domain/aggregates/conversion.aggregate.js';
+import type { ProviderId, ModelSource } from '../domain/aggregates/conversion.aggregate.js';
 
 export interface ApiMediaAssetInput extends Pick<MediaAssetProps, 'url' | 'storageKey' | 'sizeBytes'> {
   mimeType: MediaAssetType;
@@ -42,6 +42,7 @@ export interface ConversionSnapshot {
   errorMessage?: string;
   provider?: ProviderId;
   qualityReport?: QualityReportProps;
+  modelSource?: ModelSource;
   approvedAt?: string;
   rejectionReason?: string;
   createdAt: string;

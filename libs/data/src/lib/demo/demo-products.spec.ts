@@ -1,4 +1,4 @@
-import { DEMO_PRODUCT_FAILED, DEMO_PRODUCT_SUCCESS, DEMO_PRODUCT_WARNING } from './demo-products.js';
+import { DEMO_PRODUCT_FAILED, DEMO_PRODUCT_SUCCESS, DEMO_PRODUCT_WARNING, DEMO_PRODUCT_MANUAL_FALLBACK } from './demo-products.js';
 
 describe('demo products', () => {
   describe('DEMO_PRODUCT_FAILED', () => {
@@ -75,8 +75,28 @@ describe('demo products', () => {
     });
   });
 
+  describe('DEMO_PRODUCT_MANUAL_FALLBACK', () => {
+    it('has required fields', () => {
+      expect(DEMO_PRODUCT_MANUAL_FALLBACK.id).toBeTruthy();
+      expect(DEMO_PRODUCT_MANUAL_FALLBACK.name).toBeTruthy();
+      expect(DEMO_PRODUCT_MANUAL_FALLBACK.createdAt).toBeInstanceOf(Date);
+      expect(DEMO_PRODUCT_MANUAL_FALLBACK.updatedAt).toBeInstanceOf(Date);
+    });
+    it('has workflowStatus ready_for_review — requires merchant review', () => {
+      expect(DEMO_PRODUCT_MANUAL_FALLBACK.workflowStatus).toBe('ready_for_review');
+    });
+    it('has readinessScore >= 70', () => {
+      expect(DEMO_PRODUCT_MANUAL_FALLBACK.aiAnalysis!.readinessScore!).toBeGreaterThanOrEqual(70);
+    });
+  });
+
   it('each demo product has a unique id', () => {
-    const ids = new Set([DEMO_PRODUCT_FAILED.id, DEMO_PRODUCT_SUCCESS.id, DEMO_PRODUCT_WARNING.id]);
-    expect(ids.size).toBe(3);
+    const ids = new Set([
+      DEMO_PRODUCT_FAILED.id,
+      DEMO_PRODUCT_SUCCESS.id,
+      DEMO_PRODUCT_WARNING.id,
+      DEMO_PRODUCT_MANUAL_FALLBACK.id,
+    ]);
+    expect(ids.size).toBe(4);
   });
 });

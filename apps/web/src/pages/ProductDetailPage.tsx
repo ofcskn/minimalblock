@@ -16,7 +16,7 @@ import {
   type Product,
   type ProductCategory,
 } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, type ModelViewerHandle } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -54,6 +54,7 @@ function hydrateConversion(snapshot: ConversionSnapshot): Conversion {
     errorMessage: snapshot.errorMessage,
     provider: snapshot.provider,
     qualityReport: snapshot.qualityReport ? QualityReport.fromJSON(snapshot.qualityReport) : undefined,
+    modelSource: snapshot.modelSource ?? 'ai-generated',
     approvedAt: snapshot.approvedAt ? new Date(snapshot.approvedAt) : undefined,
     rejectionReason: snapshot.rejectionReason,
     createdAt: new Date(snapshot.createdAt),
@@ -118,6 +119,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const trendyolPublish = useTrendyolPublish(apiClient);
 
   const lastRotateEvent = useRef(0);
+  const modelViewerRef = useRef<ModelViewerHandle>(null);
 
   const loadRecord = useCallback(async () => {
     if (!id) return;
@@ -484,13 +486,16 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
       <Card className="overflow-hidden p-0">
         <div className="relative h-[28rem] bg-gray-100">
+          {/* E.4 — Load GLB in the viewer when output exists (E.18: even for failed QA) */}
           {conversion.outputAsset ? (
             <>
               <ModelViewer
+                ref={modelViewerRef}
                 modelUrl={conversion.outputAsset.url}
                 className="h-full"
                 hotspots={visibleHotspots}
                 editMode={editMode}
+                failedQa={isBlocked}
                 onHotspotAdd={handleHotspotAdd}
                 onLoad={() => eventsRepo.track(conversion.productId, user.id, 'viewer_loaded').catch(() => null)}
                 onArOpen={() => eventsRepo.track(conversion.productId, user.id, 'ar_opened').catch(() => null)}
@@ -525,8 +530,30 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                 </div>
               )}
             </>
+          ) : conversion.status.isProcessing() || conversion.status.isPending() ? (
+            /* E.5 — Loading state while AI is generating the model */
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-500">
+              <Spinner size="lg" label="Generating 3D model…" />
+              <p className="text-xs text-gray-400">This can take up to 60 seconds</p>
+            </div>
           ) : (
-            <ModelViewerPlaceholder className="h-full" />
+            /* E.7 — No-model state + E.3 manual fallback explanation */
+            <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+              <ModelViewerPlaceholder className="h-24 w-24" message="" />
+              {isFailed ? (
+                <>
+                  <p className="text-sm font-semibold text-red-700">3D generation failed</p>
+                  <p className="text-xs text-gray-500 max-w-xs">
+                    AI could not generate a 3D model from the provided images. Use the <strong>Manual GLB Fallback</strong> to upload a model you have prepared — it will still go through merchant review before publishing.
+                  </p>
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/upload')}>
+                    Upload 3D Model Fallback
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">No 3D model yet</p>
+              )}
+            </div>
           )}
         </div>
       </Card>
@@ -893,6 +920,17 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             hasConversion={!!conversion.outputAsset}
             onRunAnalysis={() => runAiAction('analyze')}
           />
+
+          {/* E.12–E.15 — Model metadata card */}
+          {conversion.outputAsset && (
+            <ModelInfoCard
+              fileName={conversion.outputAsset.storageKey.split('/').pop() ?? 'model.glb'}
+              fileSizeBytes={conversion.outputAsset.sizeBytes}
+              uploadedAt={conversion.updatedAt}
+              modelSource={conversion.modelSource}
+              onResetCamera={() => modelViewerRef.current?.resetCamera()}
+            />
+          )}
 
           <SourceImageReadinessCard
             readiness={sourceImageReadiness}

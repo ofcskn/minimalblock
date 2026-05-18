@@ -111,6 +111,53 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
   updatedAt: new Date('2026-05-18T09:30:00.000Z'),
 };
 
+export const DEMO_PRODUCT_MANUAL_FALLBACK: ProductProps = {
+  id: generateId(),
+  name: 'Ceramic Vase — Manual 3D Fallback (Demo)',
+  description: 'Hand-thrown ceramic vase with a matte glaze finish. 3D model uploaded manually as a fallback because AI generation produced unusable geometry.',
+  category: 'home-decor',
+  ownerId: 'demo-seller',
+  slug: 'ceramic-vase-demo-manual-fallback',
+  hotspots: [],
+  hotspotsSuggested: [],
+  workflowStatus: 'ready_for_review',
+  aiAnalysis: {
+    categorySuggestion: 'home-decor',
+    materials: ['ceramic', 'matte glaze'],
+    confidenceScore: 0.78,
+    readinessScore: 74,
+    missingVisuals: ['bottom view'],
+    suggestedCopy: {
+      seoTitle: 'Hand-Thrown Ceramic Vase | Matte Glaze Finish',
+      bullets: [
+        'Hand-thrown by artisan potters — no two pieces are identical',
+        'Matte glaze finish that pairs with any interior style',
+        'Watertight interior suitable for fresh or dried flowers',
+      ],
+      description: 'A minimalist ceramic vase that brings organic texture to any shelf or table. Handcrafted in small batches.',
+    },
+    returnRiskFactors: [
+      { risk: 'Glaze colour may appear slightly different across devices', fix: 'Add a colour-accurate swatch to the listing images' },
+    ],
+    qualityRecommendations: [
+      'Add a scale reference photo showing the vase next to a common object',
+      'Capture the bottom mark/signature if present',
+    ],
+    merchantRecommendations: [
+      'Emphasise the handmade, one-of-a-kind nature in copy',
+      'Group with matching ceramic items for a collection cross-sell',
+    ],
+    lastUpdatedAt: '2026-05-18T11:00:00.000Z',
+    sourceImageEntries: [
+      demoEntry('demo/vase-front.jpg', 'front', []),
+      demoEntry('demo/vase-side.jpg', 'right', []),
+      demoEntry('demo/vase-top.jpg', 'top', ['low_resolution'], 30_000),
+    ],
+  },
+  createdAt: new Date('2026-05-18T11:00:00.000Z'),
+  updatedAt: new Date('2026-05-18T11:10:00.000Z'),
+};
+
 export const DEMO_PRODUCT_WARNING: ProductProps = {
   id: generateId(),
   name: 'Modern Floor Lamp (Demo — Needs Fix)',

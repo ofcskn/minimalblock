@@ -1183,9 +1183,19 @@ Executable steps:
 
 - Generation/review flow has better input discipline.
 
-# Phase 5 — 3D Preview and Manual GLB Fallback
+# Phase 5 — 3D Preview and Manual GLB Fallback ✓ COMPLETE (2026-05-18)
 ## Objective
 Make the demo reliable even when AI generation fails.
+
+## Implementation Summary
+- Added `ModelSource = 'ai-generated' | 'manual-fallback'` type to `Conversion` aggregate; defaults to `'ai-generated'` on `Conversion.create`, set to `'manual-fallback'` on new `Conversion.createManual()` factory which starts in `awaiting_approval` (E.16, E.17 — merchant review always required, no auto-approve)
+- Added `modelSource?: ModelSource` to `ConversionSnapshot` API contract so the field travels through the API layer
+- Rewrote `ModelViewer` with: loading overlay spinner (E.5), failed-load error overlay (E.6), model-ready green badge that fades after 3 s (E.8), QA-failed red overlay badge when `failedQa` prop is true (E.9), reset camera via `useImperativeHandle` and `ModelViewerHandle` ref (E.10), `onError` callback (E.6); `ModelViewerPlaceholder` accepts optional `message` prop for contextual copy (E.7)
+- Created `ModelInfoCard` component in `libs/ui`: shows file name (E.12), formatted file size (E.14), upload date (E.13), AI-generated vs. Manual fallback source badge (E.15), and a "Reset camera" button that calls `modelViewerRef.current.resetCamera()` (E.10)
+- Updated `ProductDetailPage`: viewer section now shows processing spinner for pending/processing conversions (E.5), fallback offer UI explaining manual GLB when AI generation fails (E.1–E.3), `failedQa` prop wired to viewer when `workflowStatus === 'failed_qa'` (E.9), `ModelInfoCard` in the sidebar when `outputAsset` exists (E.12–E.15), `modelSource` hydrated from snapshot (E.15); publishing remains blocked for failed-QA via existing `isPublishable()` gate (E.19); internal preview always shows when outputAsset exists (E.18)
+- Updated `UploadPage`: mode toggle renamed from "GLB" to "3D Fallback" (E.2), empty-state for GLB mode now shows a contextual "When to use 3D Model Fallback" explanation panel (E.3), attach button label switches to "Add GLB file" in fallback mode (E.1)
+- Added `DEMO_PRODUCT_MANUAL_FALLBACK` demo product (Ceramic Vase, `ready_for_review`) demonstrating the manual fallback path with 3 source images
+- 7 new unit tests: 6 for `Conversion.modelSource` (default, createManual source, awaiting_approval gate, no auto-approve, preserved across transitions), 7 for `ModelInfoCard` (render, size format, badges, reset camera presence/absence/click); all 290 tests across 25 suites green
 
 ## TODO
 E.1. Keep manual GLB upload as a first-class fallback

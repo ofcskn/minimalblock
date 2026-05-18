@@ -4,6 +4,8 @@ import { QualityReport } from '../value-objects/quality-report.vo.js';
 
 export type ProviderId = 'meshy' | 'tripo' | 'gemini' | 'mock';
 
+export type ModelSource = 'ai-generated' | 'manual-fallback';
+
 export interface ConversionProps {
   id: string;
   productId: string;
@@ -18,6 +20,7 @@ export interface ConversionProps {
   errorMessage?: string;
   provider?: ProviderId;
   qualityReport?: QualityReport;
+  modelSource?: ModelSource;
   approvedAt?: Date;
   approvedBy?: string;
   rejectionReason?: string;
@@ -36,6 +39,7 @@ export class Conversion {
   readonly errorMessage?: string;
   readonly provider?: ProviderId;
   readonly qualityReport?: QualityReport;
+  readonly modelSource: ModelSource;
   readonly approvedAt?: Date;
   readonly approvedBy?: string;
   readonly rejectionReason?: string;
@@ -53,6 +57,7 @@ export class Conversion {
     this.errorMessage = props.errorMessage;
     this.provider = props.provider;
     this.qualityReport = props.qualityReport;
+    this.modelSource = props.modelSource ?? 'ai-generated';
     this.approvedAt = props.approvedAt;
     this.approvedBy = props.approvedBy;
     this.rejectionReason = props.rejectionReason;
@@ -72,6 +77,7 @@ export class Conversion {
       errorMessage: this.errorMessage,
       provider: this.provider,
       qualityReport: this.qualityReport,
+      modelSource: this.modelSource,
       approvedAt: this.approvedAt,
       approvedBy: this.approvedBy,
       rejectionReason: this.rejectionReason,
@@ -153,6 +159,29 @@ export class Conversion {
       sourceAsset,
       sourceAssets: sourceAssets ?? [sourceAsset],
       status: ConversionStatus.pending(),
+      modelSource: 'ai-generated',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  static createManual(
+    id: string,
+    productId: string,
+    ownerId: string,
+    sourceAsset: MediaAsset,
+    outputAsset: MediaAsset,
+  ): Conversion {
+    const now = new Date();
+    return new Conversion({
+      id,
+      productId,
+      ownerId,
+      sourceAsset,
+      sourceAssets: [sourceAsset],
+      outputAsset,
+      status: ConversionStatus.awaitingApproval(),
+      modelSource: 'manual-fallback',
       createdAt: now,
       updatedAt: now,
     });
