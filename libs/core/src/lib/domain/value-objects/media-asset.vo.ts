@@ -1,6 +1,7 @@
 export type MediaAssetType =
   | 'image/jpeg'
   | 'image/png'
+  | 'image/svg+xml'
   | 'image/webp'
   | 'model/gltf-binary'
   | 'model/gltf+json'
