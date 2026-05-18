@@ -7,6 +7,7 @@ import {
   ConversionStatus,
   MediaAsset,
   PRODUCT_CATEGORIES,
+  ProductWorkflowStatus,
   QualityReport,
   generateId,
   type ConversionSnapshot,
@@ -14,7 +15,7 @@ import {
   type Product,
   type ProductCategory,
 } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -108,6 +109,9 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [rejectReason, setRejectReason] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [trendyolOpen, setTrendyolOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [approvingProduct, setApprovingProduct] = useState(false);
   const trendyolPublish = useTrendyolPublish(apiClient);
 
   const lastRotateEvent = useRef(0);
@@ -160,7 +164,6 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   }, [apiClient, conversion]);
 
   const productName = product?.name ?? conversion?.sourceAsset.storageKey.split('/').pop() ?? 'Product';
-  const publicUrl = product && conversion?.status.value === 'approved' ? `${window.location.origin}${product.publicUrl}` : null;
   const visibleHotspots = useMemo(() => hotspots.filter((hotspot) => hotspot.position && hotspot.normal), [hotspots]);
 
   async function saveMeta() {
@@ -309,6 +312,40 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     setMetaForm((current) => ({ ...current, description: saved.description }));
   }
 
+  async function handleApproveProduct(reason?: string) {
+    if (!product) return;
+    setApprovingProduct(true);
+    try {
+      const saved = await productRepo.save(product.withWorkflowStatus('approved'));
+      setProduct(saved);
+      setOverrideOpen(false);
+      setOverrideReason('');
+      if (reason) {
+        await eventsRepo.track(product.id, user.id, 'product_approved_with_override', { reason });
+      } else {
+        await eventsRepo.track(product.id, user.id, 'product_approved');
+      }
+    } catch (approveError) {
+      setError(approveError instanceof Error ? approveError.message : 'Failed to approve product');
+    } finally {
+      setApprovingProduct(false);
+    }
+  }
+
+  async function handlePublishProduct() {
+    if (!product) return;
+    setApprovingProduct(true);
+    try {
+      const saved = await productRepo.save(product.withWorkflowStatus('published'));
+      setProduct(saved);
+      await eventsRepo.track(product.id, user.id, 'product_published');
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : 'Failed to publish product');
+    } finally {
+      setApprovingProduct(false);
+    }
+  }
+
   async function handleDownload() {
     if (!conversion?.outputAsset) return;
     setDownloading(true);
@@ -340,11 +377,20 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     );
   }
 
-  const isApproved = conversion.status.value === 'approved';
-  const isFailed = conversion.status.value === 'failed' || conversion.status.value === 'rejected';
-  const isAwaitingApproval = conversion.status.isAwaitingApproval();
-  const canPublish = isApproved;
+  // WorkflowStatus is the authoritative gate for all publish/export/approval decisions.
+  // ConversionStatus only controls the 3D pipeline display (pending → processing → done).
+  const workflowStatus = ProductWorkflowStatus.from(product.workflowStatus);
+  const isBlocked = workflowStatus.isBlocked();          // failed_qa — hard block
+  const isNeedsFix = workflowStatus.value === 'needs_fix';
+  const isReadyForReview = workflowStatus.value === 'ready_for_review';
+  const isApproved = workflowStatus.value === 'approved';
+  const isPublished = workflowStatus.value === 'published';
+  const canPublish = workflowStatus.isPublishable();     // approved | published
+  const canEmbed = workflowStatus.canExport();
+  const isAwaitingApproval = conversion.status.isAwaitingApproval(); // 3D pipeline state
+  const isFailed = conversion.status.value === 'failed' || conversion.status.value === 'rejected'; // 3D pipeline
   const qaScore = conversion.qualityReport?.score();
+  const publicUrl = canPublish ? `${window.location.origin}${product.publicUrl}` : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -363,25 +409,39 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         ) : (
           <h1 className="truncate text-2xl font-bold text-gray-900">{productName}</h1>
         )}
+        <WorkflowStatusBadge status={product.workflowStatus} />
         <StatusBadge status={conversion.status.value} />
       </div>
 
-      {/* Status banners — seller decision guide */}
-      {isFailed && (
+      {/* Status banners — seller decision guide driven by workflow status */}
+      {isBlocked && (
         <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold">✕</div>
           <div>
-            <p className="text-sm font-semibold text-red-900">{t('product.failureBannerTitle')}</p>
-            <p className="mt-1 text-xs text-red-700">{t('product.failureBannerBody')}</p>
+            <p className="text-sm font-semibold text-red-900">Visual QA Failed — Publishing blocked</p>
+            <p className="mt-1 text-xs text-red-700">
+              AI analysis found critical issues that prevent listing. Readiness score is below 40. Re-upload with better images (at least 3 angles, plain background) to try again.
+            </p>
           </div>
         </div>
       )}
-      {isAwaitingApproval && (
+      {isNeedsFix && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">!</div>
           <div>
-            <p className="text-sm font-semibold text-amber-900">{t('product.approvalBannerTitle')}</p>
-            <p className="mt-1 text-xs text-amber-700">{t('product.approvalBannerBody')}</p>
+            <p className="text-sm font-semibold text-amber-900">Needs Fix — Quality issues detected</p>
+            <p className="mt-1 text-xs text-amber-700">
+              Readiness score is 40–69. Review the AI diagnosis below and fix the flagged issues before approving, or provide an override reason to approve anyway.
+            </p>
+          </div>
+        </div>
+      )}
+      {isReadyForReview && (
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-bold">→</div>
+          <div>
+            <p className="text-sm font-semibold text-indigo-900">Ready for Merchant Review</p>
+            <p className="mt-1 text-xs text-indigo-700">AI quality check passed. Review the 3D model and AI diagnosis, then approve to unlock publishing.</p>
           </div>
         </div>
       )}
@@ -389,8 +449,17 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold">✓</div>
           <div>
-            <p className="text-sm font-semibold text-emerald-900">{t('product.approvedBannerTitle')}</p>
-            <p className="mt-1 text-xs text-emerald-700">{t('product.approvedBannerBody')}</p>
+            <p className="text-sm font-semibold text-emerald-900">Approved — Ready to publish</p>
+            <p className="mt-1 text-xs text-emerald-700">You have reviewed and approved this product. Click Publish to make it live, or use Embed / Public Page to share.</p>
+          </div>
+        </div>
+      )}
+      {isPublished && (
+        <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-600 text-white text-xs font-bold">✓</div>
+          <div>
+            <p className="text-sm font-semibold text-green-900">Published</p>
+            <p className="mt-1 text-xs text-green-700">This product is live. It can be embedded, shared via public page, or exported to Trendyol.</p>
           </div>
         </div>
       )}
@@ -450,13 +519,19 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           <Button onClick={handleDownload} loading={downloading}>{t('product.download')}</Button>
         )}
 
-        {/* Embed — only for approved products */}
-        {canPublish && conversion.outputAsset && (
-          <Button variant="secondary" onClick={() => setEmbedOpen(true)}>{t('product.embed')}</Button>
+        {/* Embed — requires approved or published */}
+        {conversion.outputAsset && (
+          canEmbed ? (
+            <Button variant="secondary" onClick={() => setEmbedOpen(true)}>{t('product.embed')}</Button>
+          ) : (
+            <Button variant="secondary" disabled title={`Embedding is locked until the product is approved. Current status: ${product.workflowStatus.replace(/_/g, ' ')}.`}>
+              {t('product.embed')}
+            </Button>
+          )
         )}
 
-        {/* Public page link — only for approved products */}
-        {canPublish && publicUrl && (
+        {/* Public page link — requires approved or published */}
+        {publicUrl && canPublish ? (
           <a
             href={publicUrl}
             target="_blank"
@@ -465,6 +540,14 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           >
             {t('product.sharePublicPage')} ↗
           </a>
+        ) : !canPublish && conversion.outputAsset && (
+          <button
+            disabled
+            title={`Public page is locked until the product is approved. Current status: ${product.workflowStatus.replace(/_/g, ' ')}.`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-base font-medium text-gray-400 cursor-not-allowed"
+          >
+            {t('product.sharePublicPage')} ↗
+          </button>
         )}
 
         {/* Hotspot editing — available when output exists */}
@@ -474,7 +557,24 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           </Button>
         )}
 
-        {/* Approval actions — awaiting approval state */}
+        {/* Product approval gate — driven by workflow status, not conversion status */}
+        {isReadyForReview && (
+          <Button onClick={() => handleApproveProduct()} loading={approvingProduct}>
+            Approve Product
+          </Button>
+        )}
+        {isNeedsFix && (
+          <Button variant="secondary" onClick={() => setOverrideOpen(true)}>
+            Approve Anyway…
+          </Button>
+        )}
+        {isApproved && (
+          <Button onClick={handlePublishProduct} loading={approvingProduct}>
+            Publish
+          </Button>
+        )}
+
+        {/* 3D pipeline approval — keep for awaiting_approval conversion state */}
         {isAwaitingApproval && (
           <>
             <Button onClick={handleApprove} loading={busyAction === 'approve'}>{t('product.approve')}</Button>
@@ -482,13 +582,13 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           </>
         )}
 
-        {/* Fix path for failed products */}
-        {isFailed && (
+        {/* Fix path for blocked products */}
+        {(isBlocked || isFailed) && (
           <Button variant="secondary" onClick={() => navigate('/upload')}>Re-upload with better images</Button>
         )}
 
-        {/* Export to Trendyol — only for approved products */}
-        {canPublish && (
+        {/* Export to Trendyol — requires published */}
+        {isPublished ? (
           <Button
             variant="secondary"
             onClick={() => {
@@ -498,6 +598,28 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                 void trendyolPublish.generateListing(product.id);
               }
             }}
+          >
+            {t('product.publishTrendyol')}
+          </Button>
+        ) : canPublish ? (
+          <Button
+            variant="secondary"
+            title="Trendyol export requires the product to be published first."
+            onClick={() => {
+              trendyolPublish.reset();
+              setTrendyolOpen(true);
+              if (trendyolPublish.phase === 'idle') {
+                void trendyolPublish.generateListing(product.id);
+              }
+            }}
+          >
+            {t('product.publishTrendyol')}
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            disabled
+            title={`Trendyol export is locked until the product is approved and published. Current status: ${product.workflowStatus.replace(/_/g, ' ')}.`}
           >
             {t('product.publishTrendyol')}
           </Button>
@@ -534,15 +656,20 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         <Card className="p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.marketplaceReadiness')}</p>
           <div className="mt-2">
-            {isApproved ? (
+            {canPublish ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 {t('product.readinessApproved')}
               </span>
-            ) : isFailed ? (
+            ) : isBlocked ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700">
                 <span className="h-2 w-2 rounded-full bg-red-500" />
-                {t('product.readinessBlocked')}
+                Visual QA Failed
+              </span>
+            ) : isNeedsFix ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Needs Fix
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
@@ -552,7 +679,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             )}
           </div>
           <p className="mt-2 text-xs text-gray-400">
-            {isApproved ? 'Trendyol · Shopify · Amazon' : 'Listing blocked until QA passes'}
+            {canPublish ? 'Trendyol · Shopify · Amazon' : 'Listing blocked until approved'}
           </p>
         </Card>
 
@@ -560,12 +687,12 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         <Card className="p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.exportPackage')}</p>
           <div className="mt-2">
-            {isApproved ? (
+            {canEmbed ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 {t('product.exportPackageReady')}
               </span>
-            ) : isFailed ? (
+            ) : isBlocked ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700">
                 <span className="h-2 w-2 rounded-full bg-red-500" />
                 {t('product.exportPackageBlocked')}
@@ -578,7 +705,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             )}
           </div>
           <p className="mt-2 text-xs text-gray-400">
-            {isApproved ? 'GLB · preview · catalog metadata' : 'Available after approval'}
+            {canEmbed ? 'GLB · preview · catalog metadata' : 'Available after approval'}
           </p>
         </Card>
       </div>
@@ -1070,6 +1197,35 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={overrideOpen} onClose={() => setOverrideOpen(false)} title="Approve with Override">
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            This product has quality issues (score 40–69). You are overriding the AI recommendation. Provide a reason to continue.
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Override reason (required)</label>
+            <textarea
+              autoFocus
+              rows={3}
+              value={overrideReason}
+              onChange={(event) => setOverrideReason(event.target.value)}
+              placeholder="e.g. Images already optimised for this category; risk accepted by seller."
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => { setOverrideOpen(false); setOverrideReason(''); }}>Cancel</Button>
+            <Button
+              onClick={() => handleApproveProduct(overrideReason.trim())}
+              loading={approvingProduct}
+              disabled={!overrideReason.trim()}
+            >
+              Approve Anyway
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal open={embedOpen} onClose={() => { setEmbedOpen(false); setCopied(false); }} title={t('product.embedModal.title')}>

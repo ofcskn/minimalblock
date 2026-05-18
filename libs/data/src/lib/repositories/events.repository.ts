@@ -14,7 +14,9 @@ export type EventType =
   | 'hotspot_suggestion_accepted'
   | 'conversion_approved'
   | 'conversion_rejected'
-  | 'product_published';
+  | 'product_published'
+  | 'product_approved'
+  | 'product_approved_with_override';
 
 export interface ProductStats {
   productId: string;
