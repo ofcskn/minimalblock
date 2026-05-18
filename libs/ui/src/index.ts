@@ -29,6 +29,9 @@ export type { SourceImageReadinessCardProps } from './lib/components/SourceImage
 export { ModelInfoCard } from './lib/components/ModelInfoCard.js';
 export type { ModelInfoCardProps } from './lib/components/ModelInfoCard.js';
 
+export { HotspotEditorPanel } from './lib/components/HotspotEditorPanel.js';
+export type { HotspotEditorPanelProps } from './lib/components/HotspotEditorPanel.js';
+
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';
