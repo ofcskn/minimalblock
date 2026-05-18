@@ -20,3 +20,6 @@ export type { Convert2DTo3DRequest, AnalyzeImageRequest, QualityHint } from './l
 export type { Convert2DTo3DResponse, ImageAnalysisResponse } from './lib/types/ai-response.types.js';
 export type { ReturnRiskItem } from './lib/gemini/gemini-risk-analyzer.js';
 export type { ReturnRiskInput } from './lib/prompts/return-risk-analysis.prompt.js';
+
+// Mock provider (replaceable — real Gemini implements the same interface)
+export { getMockAnalysis } from './lib/mock/mock-analyzer.js';

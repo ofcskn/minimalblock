@@ -1,4 +1,5 @@
 import { generateId } from '../../utils/id-generator.js';
+import { ProductWorkflowStatus, type ProductWorkflowStatusValue } from '../value-objects/product-workflow-status.vo.js';
 
 export type ProductCategory = 'furniture' | 'home-decor' | 'bags' | 'accessories' | 'electronics' | 'other';
 export type SuggestedHotspotType = 'material' | 'dimension' | 'feature' | 'warning' | 'assembly';
@@ -56,6 +57,7 @@ export interface ProductProps {
   hotspots: Hotspot[];
   hotspotsSuggested?: SuggestedHotspot[];
   aiAnalysis?: ProductAiAnalysis | null;
+  workflowStatus?: ProductWorkflowStatusValue;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +72,7 @@ export class Product {
   readonly hotspots: Hotspot[];
   readonly hotspotsSuggested: SuggestedHotspot[];
   readonly aiAnalysis: ProductAiAnalysis | null;
+  readonly workflowStatus: ProductWorkflowStatusValue;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
@@ -83,12 +86,21 @@ export class Product {
     this.hotspots = props.hotspots;
     this.hotspotsSuggested = props.hotspotsSuggested ?? [];
     this.aiAnalysis = props.aiAnalysis ?? null;
+    this.workflowStatus = props.workflowStatus ?? 'draft';
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
 
   isOwnedBy(userId: string): boolean {
     return this.ownerId === userId;
+  }
+
+  isPublishable(): boolean {
+    return ProductWorkflowStatus.from(this.workflowStatus).isPublishable();
+  }
+
+  withWorkflowStatus(s: ProductWorkflowStatusValue): Product {
+    return new Product({ ...this, workflowStatus: s, updatedAt: new Date() });
   }
 
   get publicUrl(): string {
