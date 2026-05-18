@@ -1,12 +1,16 @@
 import type {
+  ImportedImageCandidate,
+  ProductImportData,
   ProductAiAnalysis,
   ProductAiCopy,
   ProductCategory,
+  ProductInputMethod,
   ReturnRiskFactor,
   SuggestedHotspot,
 } from '../domain/entities/product.entity.js';
 import type { ConversionStatusValue } from '../domain/value-objects/conversion-status.vo.js';
 import type { MediaAssetProps, MediaAssetType } from '../domain/value-objects/media-asset.vo.js';
+import type { ProductWorkflowStatusValue } from '../domain/value-objects/product-workflow-status.vo.js';
 import type { QualityReportProps } from '../domain/value-objects/quality-report.vo.js';
 import type { ProviderId, ModelSource } from '../domain/aggregates/conversion.aggregate.js';
 
@@ -96,4 +100,43 @@ export interface QualityCheckRequest {
 export interface QualityCheckResponse {
   readinessScore?: number;
   qualityRecommendations: string[];
+}
+
+export interface ProductImportSnapshot {
+  productId: string;
+  name: string;
+  description: string;
+  category: ProductCategory;
+  workflowStatus: ProductWorkflowStatusValue;
+  inputMethod: ProductInputMethod;
+  importData: ProductImportData | null;
+}
+
+export interface ImportProductUrlRequest {
+  url: string;
+}
+
+export interface ImportProductUrlResponse {
+  product: ProductImportSnapshot;
+}
+
+export interface SaveImportedReviewRequest {
+  title: string;
+  description: string;
+  category: ProductCategory;
+  materials: string[];
+  dimensions: string;
+  selectedImageIds: string[];
+  sellerConfirmedText: boolean;
+  sellerConfirmedImages: boolean;
+}
+
+export interface SaveImportedReviewResponse {
+  product: ProductImportSnapshot;
+  selectedImages: ImportedImageCandidate[];
+  readinessScore: number;
+}
+
+export interface RetryImportedProductResponse {
+  product: ProductImportSnapshot;
 }
