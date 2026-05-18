@@ -383,7 +383,8 @@ async function analyzeProductWithGemini(ctx: RequestContext, product: Product, s
     },
   ];
 
-  for (const sourceAsset of sourceAssets.slice(0, 3)) {
+  const GEMINI_SUPPORTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  for (const sourceAsset of sourceAssets.filter((a) => GEMINI_SUPPORTED_MIME.has(a.mimeType)).slice(0, 3)) {
     parts.push({ inlineData: await fetchAssetBase64(sourceAsset) });
   }
 
@@ -425,7 +426,8 @@ async function generateSuggestedHotspots(ctx: RequestContext, product: Product, 
         `Product: ${product.name}\nCategory: ${product.category}\nDescription: ${product.description || 'n/a'}`,
     },
   ];
-  for (const sourceAsset of sourceAssets.slice(0, 2)) {
+  const GEMINI_SUPPORTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  for (const sourceAsset of sourceAssets.filter((a) => GEMINI_SUPPORTED_MIME.has(a.mimeType)).slice(0, 2)) {
     parts.push({ inlineData: await fetchAssetBase64(sourceAsset) });
   }
   const result = await model.generateContent(parts);
