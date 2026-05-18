@@ -17,6 +17,9 @@ export type { ModalProps } from './lib/components/Modal.js';
 export { StatusBadge } from './lib/components/StatusBadge.js';
 export type { StatusBadgeProps } from './lib/components/StatusBadge.js';
 
+export { WorkflowStatusBadge } from './lib/components/WorkflowStatusBadge.js';
+export type { WorkflowStatusBadgeProps } from './lib/components/WorkflowStatusBadge.js';
+
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';
