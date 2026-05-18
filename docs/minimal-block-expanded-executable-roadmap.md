@@ -311,11 +311,34 @@ Executable steps:
    3. Add or update mock/demo data when needed so the failed-product and successful-product demo paths both exercise this behavior.
    4. Validate `Keep room for manual seller override, but require a reason` with the relevant unit, integration, E2E, or manual demo-path test; record the expected pass/fail behavior in the issue notes.
 
+# Phase 0 — Product URL Import and AI Autofill
+## Objective
+Make Product URL Import the primary seller onboarding path for the MVP: seller pastes a product URL, Minimal Block extracts product content, autofills missing fields, routes imported images through Source Image Readiness, runs AI Diagnosis, and blocks public/export actions until seller review and approval gates pass.
+
+## TODO
+0.1. Make `Import from Product URL` the primary create-product action.
+0.2. Keep manual image upload and manual GLB upload available as fallback paths only.
+0.3. Add a server-side scraper boundary with supported-domain config, generic fallback mode, timeout handling, blocked-page handling, and mock scraper reliability mode.
+0.4. Normalize scraper output into one schema: title, description, category hints, materials, dimensions, price metadata, image URL list, source URL, scrape timestamp, confidence, warnings, failure reasons, and internal debug fields.
+0.5. Download imported images server-side into the existing `media-assets` bucket and preserve provenance for original image URLs and seller-selected imported images.
+0.6. Run AI autofill on scraped content without letting AI silently overwrite high-confidence scraper fields; label AI-filled values as suggestions.
+0.7. Add seller review UI for extracted text plus imported image selection, requiring explicit confirmation before the import proceeds.
+0.8. Reuse Source Image Readiness, AI Diagnosis, Merchant Review, Public Preview, and Export gates for imported products.
+0.9. Persist import provenance on the product record: source URL, domain, scrape timestamp, extraction method, selected imported images, seller edits, and seller confirmations.
+0.10. Add scraper failure states, retry, manual fallback actions, and hackathon-safe mock success/failure URLs.
+
 # Phase 1 — Scope Freeze and Demo Strategy
 ## Objective
 Lock the one-day MVP scope and avoid building features that will not help the hackathon demo.
 
 ## TODO
+Prioritize Product URL Import as the first demo action.
+Start the demo with seller pasting a product URL.
+Keep manual upload as fallback, not primary flow.
+Use mock scraper data for demo reliability.
+Avoid full marketplace integration; only scrape/import visible product page content.
+Avoid making scraped content public before seller review.
+
 A.1. Define the product as AI Visual Commerce QA, not only a 3D viewer
 
 Executable steps:
@@ -467,6 +490,21 @@ Executable steps:
 Prevent bad assets from showing as “Approved.”
 
 ## TODO
+Statuses to include in the MVP workflow:
+URL submitted.
+Scraping product page.
+Scrape failed.
+Extraction review needed.
+Autofill ready.
+Imported source images ready.
+Source readiness pending.
+
+Gate rules:
+Scraped product cannot be approved before seller review.
+AI-autofilled product cannot be published before Merchant Review.
+Scraper confidence does not equal product quality approval.
+Imported images must pass Source Image Readiness before public release.
+
 B.1. Replace simple approved/not-approved logic with workflow status
 
 Executable steps:
@@ -628,6 +666,15 @@ Turn AI analysis from simple scores into a clear decision and action panel.
 - Tests: 131 core tests pass, 28 UI tests pass (includes `product.entity.spec.ts` and `AiDiagnosisPanel.spec.tsx`)
 
 ## TODO
+Show import confidence score.
+Show autofill confidence score.
+Show scraper warnings.
+Show fields extracted from URL.
+Show fields inferred by AI.
+Show fields edited by seller.
+Warn when product metadata is weak or incomplete.
+Recommend manual correction when scraped data is insufficient.
+
 C.1. Show confidence score
 
 Executable steps:
@@ -970,7 +1017,7 @@ Executable steps:
 
 # Phase 4 — Source Image Readiness ✓ COMPLETE (2026-05-18)
 ## Objective
-Help sellers understand whether their uploaded product images are actually useful.
+Help sellers understand whether uploaded or URL-imported product images are actually useful.
 
 ## Implementation Summary
 - Created `SourceImageReadiness` value object in `libs/core` with: `fromMediaAssets()` (filename-heuristic derivation) and `fromEntries()` (pre-computed/AI-enriched). Computes `score` (0–100), `missingViews`, `coveredViews`, `hasEnoughUniqueViews`, `weakImages`, `hasDuplicates`, `hasLowResImages`
@@ -983,6 +1030,13 @@ Help sellers understand whether their uploaded product images are actually usefu
 - 27 new unit tests (core VO + UI component), all passing
 
 ## TODO
+Accept imported images from Product URL Import.
+Show whether each image came from scraper or manual upload.
+Show original source URL for imported images.
+Let seller remove weak scraped images.
+Let seller upload missing views after URL import.
+Do not assume many scraped images are useful images.
+
 D.1. Count uploaded images
 
 Executable steps:
@@ -1658,6 +1712,16 @@ Executable steps:
 Create the final seller approval page.
 
 ## TODO
+Show source URL.
+Show import method.
+Show scraper confidence.
+Show AI autofill confidence.
+Show seller-edited imported fields.
+Require seller confirmation for scraped title.
+Require seller confirmation for scraped description.
+Require seller confirmation for scraped images.
+Block approval if imported content has not been reviewed.
+
 G.1. Create a merchant review page
 
 Executable steps:
@@ -2340,6 +2404,12 @@ Executable steps:
 Make the marketplace/provider story credible without building real Trendyol integration today.
 
 ## TODO
+Include source URL in export package summary.
+Include imported image links after seller approval.
+Include seller-reviewed product description.
+Mark AI-autofilled fields as reviewed before export.
+Warn that URL import is not marketplace API sync.
+
 J.1. Rename “Publish to Trendyol” to “Trendyol Readiness” or “Export Trendyol Package.”
 
 Executable steps:
@@ -3065,6 +3135,15 @@ Executable steps:
 Make the demo reliable even if AI, 3D, or network services fail.
 
 ## TODO
+Prepare mock URL for failed laptop product.
+Prepare mock URL for successful product.
+Prepare mock scraper response with product title.
+Prepare mock scraper response with product description.
+Prepare mock scraper response with extracted image URLs.
+Prepare mock AI autofill output.
+Prepare scraper failure demo state.
+Prepare manual fallback after scraper failure.
+
 M.1. Prepare failed laptop product
 
 Executable steps:
