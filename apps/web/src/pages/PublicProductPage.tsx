@@ -46,8 +46,14 @@ export function PublicProductPage() {
       setProduct(prod);
       setOgMeta(prod.name, prod.description);
 
+      if (!(prod.workflowStatus === 'approved' || prod.workflowStatus === 'published')) {
+        setConversion(null);
+        setLoading(false);
+        return;
+      }
+
       const convs = await conversionRepo.findByProductId(prod.id);
-      const completed = convs.find(c => c.status.isViewable() && !!c.outputAsset) ?? convs[0] ?? null;
+      const completed = convs.find(c => c.status.value === 'approved' && !!c.outputAsset) ?? null;
       setConversion(completed ?? null);
       setLoading(false);
 
@@ -73,10 +79,10 @@ export function PublicProductPage() {
   }
 
   const publicUrl = window.location.href;
-  const isApproved = conversion?.status.value === 'approved';
+  const isApproved = product.workflowStatus === 'approved' || product.workflowStatus === 'published';
   const hasGlb = isApproved && !!conversion?.outputAsset;
 
-  if (!isApproved && !conversion) {
+  if (!isApproved || !conversion) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-center px-6">
         <p className="text-lg font-semibold text-gray-900">Product not available</p>
