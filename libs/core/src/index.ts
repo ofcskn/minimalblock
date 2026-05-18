@@ -7,6 +7,8 @@ export * from './lib/domain/value-objects/media-asset.vo.js';
 export * from './lib/domain/value-objects/conversion-status.vo.js';
 export * from './lib/domain/value-objects/quality-report.vo.js';
 export * from './lib/domain/value-objects/generation-job.vo.js';
+export * from './lib/domain/value-objects/product-workflow-status.vo.js';
+export * from './lib/domain/value-objects/export-profile.vo.js';
 
 // Domain — Aggregates
 export * from './lib/domain/aggregates/conversion.aggregate.js';
