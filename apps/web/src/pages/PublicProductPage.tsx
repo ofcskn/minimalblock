@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { getSupabaseClient, SupabaseProductRepository, SupabaseConversionRepository, SupabaseEmbedViewsRepository } from '@minimalblock/data';
 import type { Product } from '@minimalblock/core';
 import type { Conversion } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Spinner, QrCode } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, Spinner, QrCode } from '@minimalblock/ui';
 
 function getAnonClient() {
   const url = import.meta.env['VITE_SUPABASE_URL'] as string;
@@ -46,8 +46,14 @@ export function PublicProductPage() {
       setProduct(prod);
       setOgMeta(prod.name, prod.description);
 
+      if (!(prod.workflowStatus === 'approved' || prod.workflowStatus === 'published')) {
+        setConversion(null);
+        setLoading(false);
+        return;
+      }
+
       const convs = await conversionRepo.findByProductId(prod.id);
-      const completed = convs.find(c => c.status.isViewable() && !!c.outputAsset) ?? convs[0] ?? null;
+      const completed = convs.find(c => c.status.value === 'approved' && !!c.outputAsset) ?? null;
       setConversion(completed ?? null);
       setLoading(false);
 
@@ -66,15 +72,24 @@ export function PublicProductPage() {
   if (notFound || !product) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-center px-6">
-        <p className="text-lg font-semibold text-gray-900">Product not found</p>
-        <p className="text-sm text-gray-500">This product may have been deleted or the link is incorrect.</p>
-        <a href="/" className="text-sm text-indigo-600 hover:underline">Go to Minimal Block</a>
+        <p className="text-lg font-semibold text-gray-900">Product not available</p>
+        <p className="text-sm text-gray-500">This product preview is not available. It may not have been published yet.</p>
       </div>
     );
   }
 
   const publicUrl = window.location.href;
-  const hasGlb = conversion?.status.isViewable() && !!conversion.outputAsset;
+  const isApproved = product.workflowStatus === 'approved' || product.workflowStatus === 'published';
+  const hasGlb = isApproved && !!conversion?.outputAsset;
+
+  if (!isApproved || !conversion) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-center px-6">
+        <p className="text-lg font-semibold text-gray-900">Product not available</p>
+        <p className="text-sm text-gray-500">This product is not yet available for public preview.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,16 +116,13 @@ export function PublicProductPage() {
             </svg>
             QR
           </button>
-          <a href="https://minimalblock.app" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-gray-600">
-            Minimal Block
-          </a>
         </div>
       </div>
 
       {/* QR code panel */}
       {qrOpen && (
         <div className="bg-white border-b border-gray-100 px-6 py-5 flex flex-col items-center gap-3">
-          <p className="text-sm text-gray-500">Scan to open on mobile / AR</p>
+          <p className="text-sm text-gray-500">Scan to open on any device</p>
           <QrCode value={publicUrl} size={180} />
           <p className="text-xs text-gray-400 break-all max-w-sm text-center">{publicUrl}</p>
         </div>
@@ -130,26 +142,27 @@ export function PublicProductPage() {
         )}
       </div>
 
-      {/* Info section */}
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
-        {conversion && (
-          <div className="flex items-center gap-2">
-            <StatusBadge status={conversion.status.value} />
-            {hasGlb && conversion.outputAsset && (
-              <span className="text-xs text-gray-400">
-                {(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB · AR enabled
-              </span>
-            )}
-          </div>
-        )}
+      {/* Trust badge */}
+      {isApproved && (
+        <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs text-emerald-700">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+            </svg>
+            Accuracy verified · AI quality-checked product experience
+          </span>
+        </div>
+      )}
 
+      {/* Info section */}
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
         {product.description && (
           <p className="text-sm text-gray-700 leading-relaxed">{product.description}</p>
         )}
 
-        {product.hotspots.length > 0 && (
+        {product.hotspots.filter(hs => hs.position && hs.normal).length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Annotations</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Product features</p>
             <div className="flex flex-wrap gap-2">
               {product.hotspots.filter(hs => hs.position && hs.normal).map(hs => (
                 <span key={hs.id} className="rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs text-indigo-700">
@@ -160,9 +173,16 @@ export function PublicProductPage() {
           </div>
         )}
 
+        {hasGlb && conversion?.outputAsset && (
+          <div className="rounded-xl border border-gray-100 bg-white p-4 text-sm text-gray-600">
+            <p className="font-medium text-gray-900">Interact with this product</p>
+            <p className="mt-1 text-xs text-gray-500">Rotate the 3D model above to explore every angle. Tap hotspots to learn about features.</p>
+          </div>
+        )}
+
         <div className="pt-4 border-t border-gray-100 text-center">
           <p className="text-xs text-gray-400">
-            3D model powered by{' '}
+            Verified 3D product experience powered by{' '}
             <a href="https://minimalblock.app" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
               Minimal Block
             </a>

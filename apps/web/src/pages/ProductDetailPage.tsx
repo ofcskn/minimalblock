@@ -5,16 +5,20 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Conversion,
   ConversionStatus,
+  HotspotQuality,
+  type ImportedImageCandidate,
   MediaAsset,
   PRODUCT_CATEGORIES,
+  ProductWorkflowStatus,
   QualityReport,
+  SourceImageReadiness,
   generateId,
   type ConversionSnapshot,
   type Hotspot,
   type Product,
   type ProductCategory,
 } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, HotspotEditorPanel, type ModelViewerHandle } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -52,6 +56,7 @@ function hydrateConversion(snapshot: ConversionSnapshot): Conversion {
     errorMessage: snapshot.errorMessage,
     provider: snapshot.provider,
     qualityReport: snapshot.qualityReport ? QualityReport.fromJSON(snapshot.qualityReport) : undefined,
+    modelSource: snapshot.modelSource ?? 'ai-generated',
     approvedAt: snapshot.approvedAt ? new Date(snapshot.approvedAt) : undefined,
     rejectionReason: snapshot.rejectionReason,
     createdAt: new Date(snapshot.createdAt),
@@ -79,6 +84,30 @@ function buildModelViewerSnippet(modelUrl: string): string {
   return `<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>\n<model-viewer\n  src="${modelUrl}"\n  camera-controls\n  auto-rotate\n  ar\n  ar-modes="webxr scene-viewer"\n  style="width:100%;height:400px;border-radius:12px"\n></model-viewer>`;
 }
 
+function toImportedMediaAssets(candidates: ImportedImageCandidate[] | undefined): MediaAsset[] {
+  return (candidates ?? [])
+    .filter((candidate) => candidate.selected && candidate.url && candidate.storageKey && candidate.mimeType && candidate.sizeBytes !== undefined)
+    .map((candidate) => new MediaAsset({
+      url: candidate.url!,
+      storageKey: candidate.storageKey!,
+      mimeType: candidate.mimeType!,
+      kind: 'source-image',
+      sizeBytes: candidate.sizeBytes!,
+    }));
+}
+
+function supportLevelLabel(level: string | undefined): string {
+  switch (level) {
+    case 'supported':
+      return 'Supported domain';
+    case 'mock':
+      return 'Mock demo import';
+    case 'best_effort':
+    default:
+      return 'Best-effort extraction';
+  }
+}
+
 export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -93,6 +122,9 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [editingMeta, setEditingMeta] = useState(false);
   const [metaForm, setMetaForm] = useState({ name: '', description: '', category: 'other' as ProductCategory });
   const [savingMeta, setSavingMeta] = useState(false);
+  const [savingImportReview, setSavingImportReview] = useState(false);
+  const [retryingImport, setRetryingImport] = useState(false);
+  const [startingImported3d, setStartingImported3d] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [savingHotspots, setSavingHotspots] = useState(false);
   const [pendingHotspot, setPendingHotspot] = useState<{ position: string; normal: string } | null>(null);
@@ -108,30 +140,65 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [rejectReason, setRejectReason] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [trendyolOpen, setTrendyolOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [approvingProduct, setApprovingProduct] = useState(false);
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
+  const [diagnosisError, setDiagnosisError] = useState<string | null>(null);
+  const [importForm, setImportForm] = useState({
+    title: '',
+    description: '',
+    category: 'other' as ProductCategory,
+    materials: '',
+    dimensions: '',
+    selectedImageIds: [] as string[],
+    sellerConfirmedText: false,
+    sellerConfirmedImages: false,
+  });
   const trendyolPublish = useTrendyolPublish(apiClient);
 
   const lastRotateEvent = useRef(0);
+  const modelViewerRef = useRef<ModelViewerHandle>(null);
 
   const loadRecord = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const found = await conversionRepo.findById(id);
-      if (!found || !found.isAccessibleBy(user.id)) {
-        throw new Error('Model not found');
+      let foundProduct = await productRepo.findById(id);
+      let foundConversion: Conversion | null = null;
+
+      if (foundProduct) {
+        const productConversions = await conversionRepo.findByProductId(foundProduct.id);
+        foundConversion = [...productConversions].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null;
+      } else {
+        const found = await conversionRepo.findById(id);
+        if (!found || !found.isAccessibleBy(user.id)) {
+          throw new Error('Model not found');
+        }
+        foundConversion = found;
+        foundProduct = await productRepo.findById(found.productId);
       }
-      const foundProduct = await productRepo.findById(found.productId);
       if (!foundProduct) {
         throw new Error('Product not found');
       }
 
-      setConversion(found);
+      setConversion(foundConversion);
       setProduct(foundProduct);
       setHotspots(foundProduct.hotspots);
       setMetaForm({
         name: foundProduct.name,
         description: foundProduct.description,
         category: foundProduct.category,
+      });
+      setImportForm({
+        title: foundProduct.importData?.fields.title?.value ?? foundProduct.name,
+        description: foundProduct.importData?.fields.description?.value ?? foundProduct.description,
+        category: foundProduct.importData?.fields.category?.value ?? foundProduct.category,
+        materials: (foundProduct.importData?.fields.materials?.value ?? foundProduct.aiAnalysis?.materials ?? []).join(', '),
+        dimensions: foundProduct.importData?.fields.dimensions?.value ?? '',
+        selectedImageIds: foundProduct.importData?.selectedImageIds ?? [],
+        sellerConfirmedText: foundProduct.importData?.sellerConfirmedText ?? false,
+        sellerConfirmedImages: foundProduct.importData?.sellerConfirmedImages ?? false,
       });
       setError(null);
     } catch (loadError) {
@@ -160,8 +227,6 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   }, [apiClient, conversion]);
 
   const productName = product?.name ?? conversion?.sourceAsset.storageKey.split('/').pop() ?? 'Product';
-  const publicUrl = product && conversion?.status.isViewable() ? `${window.location.origin}${product.publicUrl}` : null;
-  const qualityScore = conversion?.qualityReport?.score();
   const visibleHotspots = useMemo(() => hotspots.filter((hotspot) => hotspot.position && hotspot.normal), [hotspots]);
 
   async function saveMeta() {
@@ -173,6 +238,75 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       setEditingMeta(false);
     } finally {
       setSavingMeta(false);
+    }
+  }
+
+  async function saveImportReview() {
+    if (!product) return;
+    setSavingImportReview(true);
+    setError(null);
+    try {
+      const response = await apiClient.saveImportedReview(product.id, {
+        title: importForm.title.trim(),
+        description: importForm.description.trim(),
+        category: importForm.category,
+        materials: importForm.materials.split(',').map((value) => value.trim()).filter(Boolean),
+        dimensions: importForm.dimensions.trim(),
+        selectedImageIds: importForm.selectedImageIds,
+        sellerConfirmedText: importForm.sellerConfirmedText,
+        sellerConfirmedImages: importForm.sellerConfirmedImages,
+      });
+      const refreshed = await productRepo.findById(response.product.productId);
+      if (refreshed) {
+        setProduct(refreshed);
+        setHotspots(refreshed.hotspots);
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save imported review');
+    } finally {
+      setSavingImportReview(false);
+    }
+  }
+
+  async function retryImport() {
+    if (!product) return;
+    setRetryingImport(true);
+    setError(null);
+    try {
+      const response = await apiClient.retryImportedProduct(product.id);
+      const refreshed = await productRepo.findById(response.product.productId);
+      if (refreshed) {
+        setProduct(refreshed);
+        setHotspots(refreshed.hotspots);
+        setImportForm({
+          title: refreshed.importData?.fields.title?.value ?? refreshed.name,
+          description: refreshed.importData?.fields.description?.value ?? refreshed.description,
+          category: refreshed.importData?.fields.category?.value ?? refreshed.category,
+          materials: (refreshed.importData?.fields.materials?.value ?? refreshed.aiAnalysis?.materials ?? []).join(', '),
+          dimensions: refreshed.importData?.fields.dimensions?.value ?? '',
+          selectedImageIds: refreshed.importData?.selectedImageIds ?? [],
+          sellerConfirmedText: refreshed.importData?.sellerConfirmedText ?? false,
+          sellerConfirmedImages: refreshed.importData?.sellerConfirmedImages ?? false,
+        });
+      }
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : 'Failed to retry import');
+    } finally {
+      setRetryingImport(false);
+    }
+  }
+
+  async function tryImported3d() {
+    if (!product) return;
+    setStartingImported3d(true);
+    setError(null);
+    try {
+      await apiClient.tryImportedProduct3d(product.id);
+      await loadRecord();
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : 'Failed to start AI 3D generation');
+    } finally {
+      setStartingImported3d(false);
     }
   }
 
@@ -210,6 +344,14 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     setHotspots((current) => current.filter((hotspot) => hotspot.id !== hotspotId));
   }
 
+  function updateHotspot(id: string, patch: Partial<Omit<Hotspot, 'id'>>) {
+    setHotspots((current) => current.map((h) => (h.id === id ? { ...h, ...patch } : h)));
+  }
+
+  function toggleHotspotApproval(id: string, approved: boolean) {
+    updateHotspot(id, { approved });
+  }
+
   async function saveHotspots() {
     if (!product) return;
     setSavingHotspots(true);
@@ -233,8 +375,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    if (conversion) {
-      await eventsRepo.track(conversion.productId, user.id, 'embed_copied');
+    if (product) {
+      await eventsRepo.track(product.id, user.id, 'embed_copied');
     }
   }
 
@@ -269,6 +411,10 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   async function runAiAction(action: 'analyze' | 'hotspots' | 'description' | 'risk' | 'quality') {
     if (!product) return;
     setBusyAction(action);
+    if (action === 'analyze') {
+      setDiagnosisLoading(true);
+      setDiagnosisError(null);
+    }
     try {
       if (action === 'analyze') await apiClient.analyzeProduct(product.id);
       if (action === 'hotspots') await apiClient.generateHotspots(product.id);
@@ -281,9 +427,15 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         setHotspots(refreshed.hotspots);
       }
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'AI action failed');
+      const msg = actionError instanceof Error ? actionError.message : 'AI action failed';
+      if (action === 'analyze') {
+        setDiagnosisError(msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusyAction(null);
+      if (action === 'analyze') setDiagnosisLoading(false);
     }
   }
 
@@ -310,13 +462,47 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     setMetaForm((current) => ({ ...current, description: saved.description }));
   }
 
+  async function handleApproveProduct(reason?: string) {
+    if (!product) return;
+    setApprovingProduct(true);
+    try {
+      const saved = await productRepo.save(product.withWorkflowStatus('approved'));
+      setProduct(saved);
+      setOverrideOpen(false);
+      setOverrideReason('');
+      if (reason) {
+        await eventsRepo.track(product.id, user.id, 'product_approved_with_override', { reason });
+      } else {
+        await eventsRepo.track(product.id, user.id, 'product_approved');
+      }
+    } catch (approveError) {
+      setError(approveError instanceof Error ? approveError.message : 'Failed to approve product');
+    } finally {
+      setApprovingProduct(false);
+    }
+  }
+
+  async function handlePublishProduct() {
+    if (!product) return;
+    setApprovingProduct(true);
+    try {
+      const saved = await productRepo.save(product.withWorkflowStatus('published'));
+      setProduct(saved);
+      await eventsRepo.track(product.id, user.id, 'product_published');
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : 'Failed to publish product');
+    } finally {
+      setApprovingProduct(false);
+    }
+  }
+
   async function handleDownload() {
-    if (!conversion?.outputAsset) return;
+    if (!outputAsset) return;
     setDownloading(true);
     setDownloadError(null);
     try {
-      const filename = conversion.outputAsset.storageKey.split('/').pop() ?? 'model.glb';
-      await downloadGlb(conversion.outputAsset.url, filename);
+      const filename = outputAsset.storageKey.split('/').pop() ?? 'model.glb';
+      await downloadGlb(outputAsset.url, filename);
     } catch (downloadIssue) {
       setDownloadError(downloadIssue instanceof Error ? downloadIssue.message : 'Download failed');
     } finally {
@@ -332,7 +518,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     );
   }
 
-  if (!conversion || !product) {
+  if (!product) {
     return (
       <div className="mx-auto max-w-2xl">
         <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error ?? t('product.notFound')}</div>
@@ -340,6 +526,43 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       </div>
     );
   }
+
+  // WorkflowStatus is the authoritative gate for all publish/export/approval decisions.
+  // ConversionStatus only controls the 3D pipeline display (pending → processing → done).
+  const workflowStatus = ProductWorkflowStatus.from(product.workflowStatus);
+  const importedSourceAssets = toImportedMediaAssets(product.importData?.imageCandidates);
+  const sourceAssetsForReview = conversion?.sourceAssets?.length ? conversion.sourceAssets : importedSourceAssets;
+  const outputAsset = conversion?.outputAsset;
+  const supportsReviewActions = sourceAssetsForReview.length > 0;
+  const importStatusValues = new Set([
+    'url_submitted',
+    'scraping',
+    'scrape_failed',
+    'extraction_review_needed',
+    'autofill_ready',
+    'imported_source_images_ready',
+    'source_readiness_pending',
+  ]);
+  const isImportFlow = product.inputMethod === 'url_import' || !!product.importData;
+  const isImportReviewState = importStatusValues.has(product.workflowStatus);
+
+  // Phase 4: prefer AI-enriched entries from product analysis; fall back to heuristic derivation.
+  const sourceImageReadiness = product.aiAnalysis?.sourceImageEntries
+    ? SourceImageReadiness.fromEntries(product.aiAnalysis.sourceImageEntries)
+    : sourceAssetsForReview.length > 0
+      ? SourceImageReadiness.fromMediaAssets([...sourceAssetsForReview])
+      : SourceImageReadiness.fromEntries([]);
+  const isBlocked = workflowStatus.isBlocked();          // failed_qa — hard block
+  const isNeedsFix = workflowStatus.value === 'needs_fix';
+  const isReadyForReview = workflowStatus.value === 'ready_for_review';
+  const isApproved = workflowStatus.value === 'approved';
+  const isPublished = workflowStatus.value === 'published';
+  const canPublish = workflowStatus.isPublishable();     // approved | published
+  const canEmbed = workflowStatus.canExport();
+  const isAwaitingApproval = conversion?.status.isAwaitingApproval() ?? false; // 3D pipeline state
+  const isFailed = conversion?.status.value === 'failed' || conversion?.status.value === 'rejected'; // 3D pipeline
+  const qaScore = conversion?.qualityReport?.score();
+  const publicUrl = canPublish ? `${window.location.origin}${product.publicUrl}` : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -358,31 +581,86 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         ) : (
           <h1 className="truncate text-2xl font-bold text-gray-900">{productName}</h1>
         )}
-        <StatusBadge status={conversion.status.value} />
+        <WorkflowStatusBadge status={product.workflowStatus} />
+        {conversion && <StatusBadge status={conversion.status.value} />}
       </div>
+
+      {/* Status banners — seller decision guide driven by workflow status */}
+      {isBlocked && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold">✕</div>
+          <div>
+            <p className="text-sm font-semibold text-red-900">Visual QA Failed — Publishing blocked</p>
+            <p className="mt-1 text-xs text-red-700">
+              AI analysis found critical issues that prevent listing. Readiness score is below 40. Re-upload with better images (at least 3 angles, plain background) to try again.
+            </p>
+          </div>
+        </div>
+      )}
+      {isNeedsFix && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">!</div>
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Needs Fix — Quality issues detected</p>
+            <p className="mt-1 text-xs text-amber-700">
+              Readiness score is 40–69. Review the AI diagnosis below and fix the flagged issues before approving, or provide an override reason to approve anyway.
+            </p>
+          </div>
+        </div>
+      )}
+      {isReadyForReview && (
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-bold">→</div>
+          <div>
+            <p className="text-sm font-semibold text-indigo-900">Ready for Merchant Review</p>
+            <p className="mt-1 text-xs text-indigo-700">AI quality check passed. Review the 3D model and AI diagnosis, then approve to unlock publishing.</p>
+          </div>
+        </div>
+      )}
+      {isApproved && (
+        <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold">✓</div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">Approved — Ready to publish</p>
+            <p className="mt-1 text-xs text-emerald-700">You have reviewed and approved this product. Click Publish to make it live, or use Embed / Public Page to share.</p>
+          </div>
+        </div>
+      )}
+      {isPublished && (
+        <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-600 text-white text-xs font-bold">✓</div>
+          <div>
+            <p className="text-sm font-semibold text-green-900">Published</p>
+            <p className="mt-1 text-xs text-green-700">This product is live. It can be embedded, shared via public page, or exported to Trendyol.</p>
+          </div>
+        </div>
+      )}
 
       <Card className="overflow-hidden p-0">
         <div className="relative h-[28rem] bg-gray-100">
-          {conversion.outputAsset ? (
+          {/* E.4 — Load GLB in the viewer when output exists (E.18: even for failed QA) */}
+          {outputAsset ? (
             <>
               <ModelViewer
-                modelUrl={conversion.outputAsset.url}
+                ref={modelViewerRef}
+                modelUrl={outputAsset.url}
                 className="h-full"
                 hotspots={visibleHotspots}
                 editMode={editMode}
+                failedQa={isBlocked}
                 onHotspotAdd={handleHotspotAdd}
-                onLoad={() => eventsRepo.track(conversion.productId, user.id, 'viewer_loaded').catch(() => null)}
-                onArOpen={() => eventsRepo.track(conversion.productId, user.id, 'ar_opened').catch(() => null)}
+                onLoad={() => eventsRepo.track(product.id, user.id, 'viewer_loaded').catch(() => null)}
+                onArOpen={() => eventsRepo.track(product.id, user.id, 'ar_opened').catch(() => null)}
                 onRotate={() => {
                   const now = Date.now();
                   if (now - lastRotateEvent.current < 10_000) return;
                   lastRotateEvent.current = now;
-                  eventsRepo.track(conversion.productId, user.id, 'model_rotated').catch(() => null);
+                  eventsRepo.track(product.id, user.id, 'model_rotated').catch(() => null);
                 }}
-                onSessionEnd={(durationMs) => eventsRepo.track(conversion.productId, user.id, 'session_ended', { duration_ms: durationMs }).catch(() => null)}
+                onSessionEnd={(durationMs) => eventsRepo.track(product.id, user.id, 'session_ended', { duration_ms: durationMs }).catch(() => null)}
                 onHotspotClick={(hotspotId) => {
                   const hotspot = visibleHotspots.find((item) => item.id === hotspotId);
-                  eventsRepo.track(conversion.productId, user.id, 'hotspot_clicked', {
+                  eventsRepo.track(product.id, user.id, 'hotspot_clicked', {
                     hotspot_id: hotspotId,
                     hotspot_label: hotspot?.label,
                   }).catch(() => null);
@@ -404,44 +682,124 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                 </div>
               )}
             </>
+          ) : conversion && (conversion.status.isProcessing() || conversion.status.isPending()) ? (
+            /* E.5 — Loading state while AI is generating the model */
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-500">
+              <Spinner size="lg" label="Generating 3D model…" />
+              <p className="text-xs text-gray-400">This can take up to 60 seconds</p>
+            </div>
           ) : (
-            <ModelViewerPlaceholder className="h-full" />
+            /* E.7 — No-model state + E.3 manual fallback explanation */
+            <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+              <ModelViewerPlaceholder className="h-24 w-24" message="" />
+              {isFailed ? (
+                <>
+                  <p className="text-sm font-semibold text-red-700">3D generation failed</p>
+                  <p className="text-xs text-gray-500 max-w-xs">
+                    AI could not generate a 3D model from the provided images. Use the <strong>Manual GLB Fallback</strong> to upload a model you have prepared — it will still go through merchant review before publishing.
+                  </p>
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/upload')}>
+                    Upload 3D Model Fallback
+                  </Button>
+                </>
+              ) : isImportFlow ? (
+                <>
+                  <p className="text-sm font-semibold text-gray-700">No 3D model yet</p>
+                  <p className="max-w-sm text-xs text-gray-500">
+                    URL-imported products can continue through review and quality gates without a GLB.
+                    Add or generate 3D later if you want a public interactive preview.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">No 3D model yet</p>
+              )}
+            </div>
           )}
         </div>
       </Card>
 
       <div className="flex flex-wrap gap-2">
-        {conversion.outputAsset && (
+        {/* Download always available when output exists */}
+        {outputAsset && (
           <Button onClick={handleDownload} loading={downloading}>{t('product.download')}</Button>
         )}
-        {conversion.status.isViewable() && conversion.outputAsset && (
-          <Button variant="secondary" onClick={() => setEmbedOpen(true)}>{t('product.embed')}</Button>
+
+        {/* Embed — requires approved or published */}
+        {outputAsset && (
+          canEmbed ? (
+            <Button variant="secondary" onClick={() => setEmbedOpen(true)}>{t('product.embed')}</Button>
+          ) : (
+            <Button variant="secondary" disabled title={`Embedding is locked until the product is approved. Current status: ${product.workflowStatus.replace(/_/g, ' ')}.`}>
+              {t('product.embed')}
+            </Button>
+          )
         )}
-        {publicUrl && (
+
+        {/* Public page link — requires approved or published */}
+        {publicUrl && canPublish ? (
           <a
             href={publicUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-indigo-600 px-4 py-2 text-base font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-4 py-2 text-base font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
           >
-            Public page ↗
+            {t('product.sharePublicPage')} ↗
           </a>
+        ) : !canPublish && outputAsset && (
+          <button
+            disabled
+            title={`Public page is locked until the product is approved. Current status: ${product.workflowStatus.replace(/_/g, ' ')}.`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-base font-medium text-gray-400 cursor-not-allowed"
+          >
+            {t('product.sharePublicPage')} ↗
+          </button>
         )}
-        {!editMode && conversion.outputAsset && (
+
+        {/* Hotspot editing — available when output exists */}
+        {!editMode && outputAsset && (
           <Button variant="secondary" onClick={() => setEditMode(true)}>
             {hotspots.length > 0 ? t('product.editHotspots') : t('product.addHotspot')}
           </Button>
         )}
-        {conversion.status.isAwaitingApproval() && (
+
+        {isImportFlow && !outputAsset && supportsReviewActions && (
+          <Button variant="secondary" onClick={tryImported3d} loading={startingImported3d}>
+            Try AI 3D
+          </Button>
+        )}
+
+        {/* Product approval gate — driven by workflow status, not conversion status */}
+        {isReadyForReview && (
+          <Button onClick={() => handleApproveProduct()} loading={approvingProduct}>
+            Approve Product
+          </Button>
+        )}
+        {isNeedsFix && (
+          <Button variant="secondary" onClick={() => setOverrideOpen(true)}>
+            Approve Anyway…
+          </Button>
+        )}
+        {isApproved && (
+          <Button onClick={handlePublishProduct} loading={approvingProduct}>
+            Publish
+          </Button>
+        )}
+
+        {/* 3D pipeline approval — keep for awaiting_approval conversion state */}
+        {isAwaitingApproval && (
           <>
             <Button onClick={handleApprove} loading={busyAction === 'approve'}>{t('product.approve')}</Button>
             <Button variant="danger" onClick={() => setRejectOpen(true)}>{t('product.reject')}</Button>
           </>
         )}
-        {conversion.status.isFailed() && (
-          <Button variant="secondary" onClick={() => navigate('/upload')}>Regenerate</Button>
+
+        {/* Fix path for blocked products */}
+        {(isBlocked || isFailed) && (
+          <Button variant="secondary" onClick={() => navigate('/upload')}>Re-upload with better images</Button>
         )}
-        {conversion.status.isViewable() && (
+
+        {/* Export to Trendyol — requires published */}
+        {isPublished ? (
           <Button
             variant="secondary"
             onClick={() => {
@@ -454,16 +812,121 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           >
             {t('product.publishTrendyol')}
           </Button>
+        ) : canPublish ? (
+          <Button
+            variant="secondary"
+            title="Trendyol export requires the product to be published first."
+            onClick={() => {
+              trendyolPublish.reset();
+              setTrendyolOpen(true);
+              if (trendyolPublish.phase === 'idle') {
+                void trendyolPublish.generateListing(product.id);
+              }
+            }}
+          >
+            {t('product.publishTrendyol')}
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            disabled
+            title={`Trendyol export is locked until the product is approved and published. Current status: ${product.workflowStatus.replace(/_/g, ' ')}.`}
+          >
+            {t('product.publishTrendyol')}
+          </Button>
         )}
+
         {downloadError && <p className="self-center text-xs text-red-600">{downloadError}</p>}
+      </div>
+
+      {/* Marketplace readiness + export package status */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {/* QA Score */}
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.qaScoreLabel')}</p>
+          {qaScore !== undefined ? (
+            <div className="mt-2 flex items-end gap-2">
+              <p className={`text-3xl font-bold ${qaScore >= 70 ? 'text-emerald-600' : qaScore >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                {qaScore}<span className="text-base font-normal text-gray-400">/100</span>
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-gray-400">Not scored yet</p>
+          )}
+          {qaScore !== undefined && (
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+              <div
+                className={`h-full rounded-full ${qaScore >= 70 ? 'bg-emerald-500' : qaScore >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${qaScore}%` }}
+              />
+            </div>
+          )}
+        </Card>
+
+        {/* Marketplace readiness */}
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.marketplaceReadiness')}</p>
+          <div className="mt-2">
+            {canPublish ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                {t('product.readinessApproved')}
+              </span>
+            ) : isBlocked ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                Visual QA Failed
+              </span>
+            ) : isNeedsFix ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Needs Fix
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                {t('product.readinessPending')}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            {canPublish ? 'Trendyol · Shopify · Amazon' : 'Listing blocked until approved'}
+          </p>
+        </Card>
+
+        {/* Export package */}
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('product.exportPackage')}</p>
+          <div className="mt-2">
+            {canEmbed ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                {t('product.exportPackageReady')}
+              </span>
+            ) : isBlocked ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                {t('product.exportPackageBlocked')}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-600">
+                <span className="h-2 w-2 rounded-full bg-slate-400" />
+                {t('product.exportPackagePending')}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            {canEmbed ? 'GLB · preview · catalog metadata' : 'Available after approval'}
+          </p>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <div className="mb-4 flex items-start justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">Merchant review</h2>
-              <p className="mt-1 text-xs text-gray-500">This is the seller-facing control center for product metadata, AI output, and publish state.</p>
+              <h2 className="text-sm font-semibold text-gray-900">Seller review</h2>
+              <p className="mt-1 text-xs text-gray-500">AI quality diagnosis, source images, and product metadata. Approve to unlock publish — or block to request a fix.</p>
             </div>
             {editingMeta ? (
               <div className="flex gap-2">
@@ -474,6 +937,180 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <Button size="sm" variant="secondary" onClick={() => setEditingMeta(true)}>Edit details</Button>
             )}
           </div>
+
+          {isImportFlow && product.importData && (
+            <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-indigo-900">Imported from URL</p>
+                  <p className="mt-1 text-xs text-indigo-700">
+                    {supportLevelLabel(product.importData.supportLevel)} · {product.importData.domain} · confidence {Math.round(product.importData.overallConfidence * 100)}%
+                  </p>
+                  <p className="mt-1 break-all text-[11px] text-indigo-700">{product.importData.sourceUrl}</p>
+                  {product.importData.scrapeTimestamp && (
+                    <p className="mt-1 text-[11px] text-indigo-600">Scraped {new Date(product.importData.scrapeTimestamp).toLocaleString()}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {product.workflowStatus === 'scrape_failed' && (
+                    <Button size="sm" variant="secondary" onClick={retryImport} loading={retryingImport}>Retry import</Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      await eventsRepo.track(product.id, user.id, 'import_manual_fallback_used');
+                      navigate('/upload');
+                    }}
+                  >
+                    Manual fallback
+                  </Button>
+                </div>
+              </div>
+
+              {(product.importData.warnings.length > 0 || product.importData.failureReasons.length > 0) && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {product.importData.warnings.map((warning) => (
+                    <span key={warning} className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{warning}</span>
+                  ))}
+                  {product.importData.failureReasons.map((reason) => (
+                    <span key={reason} className="rounded-full bg-red-100 px-2 py-1 text-[11px] font-medium text-red-800">{reason.replace(/_/g, ' ')}</span>
+                  ))}
+                </div>
+              )}
+
+              {isImportReviewState && (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Imported title</label>
+                      <input
+                        value={importForm.title}
+                        onChange={(event) => setImportForm((current) => ({ ...current, title: event.target.value }))}
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Category</label>
+                      <select
+                        value={importForm.category}
+                        onChange={(event) => setImportForm((current) => ({ ...current, category: event.target.value as ProductCategory }))}
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        {PRODUCT_CATEGORIES.map((value) => (
+                          <option key={value} value={value}>{t(`category.${value}`)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Imported description</label>
+                    <textarea
+                      rows={4}
+                      value={importForm.description}
+                      onChange={(event) => setImportForm((current) => ({ ...current, description: event.target.value }))}
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Materials</label>
+                      <input
+                        value={importForm.materials}
+                        onChange={(event) => setImportForm((current) => ({ ...current, materials: event.target.value }))}
+                        placeholder="wood, fabric, metal"
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Dimensions</label>
+                      <input
+                        value={importForm.dimensions}
+                        onChange={(event) => setImportForm((current) => ({ ...current, dimensions: event.target.value }))}
+                        placeholder="78 cm x 71 cm x 82 cm"
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Imported images</p>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {product.importData.imageCandidates.map((candidate) => {
+                        const checked = importForm.selectedImageIds.includes(candidate.id);
+                        return (
+                          <label key={candidate.id} className={`rounded-xl border p-3 ${checked ? 'border-indigo-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                            <div className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => setImportForm((current) => ({
+                                  ...current,
+                                  selectedImageIds: event.target.checked
+                                    ? [...current.selectedImageIds, candidate.id]
+                                    : current.selectedImageIds.filter((id) => id !== candidate.id),
+                                }))}
+                                className="mt-1"
+                              />
+                              <div className="min-w-0 flex-1">
+                                {candidate.url ? (
+                                  <img src={candidate.url} alt={candidate.title ?? candidate.sourceUrl} className="h-24 w-full rounded-lg border border-gray-200 object-cover" />
+                                ) : (
+                                  <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-100 text-xs text-gray-500">Image failed</div>
+                                )}
+                                <p className="mt-2 truncate text-xs font-medium text-gray-800">{candidate.storageKey?.split('/').pop() ?? `Imported image ${candidate.ordinal + 1}`}</p>
+                                <p className="mt-1 truncate text-[11px] text-gray-500">{candidate.sourceUrl}</p>
+                                {(candidate.warnings.length > 0 || candidate.failureReasons?.length) && (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {candidate.warnings.map((warning) => (
+                                      <span key={warning} className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">{warning.replace(/_/g, ' ')}</span>
+                                    ))}
+                                    {candidate.failureReasons?.map((reason) => (
+                                      <span key={reason} className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">{reason.replace(/_/g, ' ')}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={importForm.sellerConfirmedText}
+                      onChange={(event) => setImportForm((current) => ({ ...current, sellerConfirmedText: event.target.checked }))}
+                      className="mt-0.5"
+                    />
+                    <span>I reviewed the imported title, description, category, materials, and dimensions.</span>
+                  </label>
+                  <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={importForm.sellerConfirmedImages}
+                      onChange={(event) => setImportForm((current) => ({ ...current, sellerConfirmedImages: event.target.checked }))}
+                      className="mt-0.5"
+                    />
+                    <span>I reviewed the imported images and approve these selections for source-image readiness.</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={saveImportReview}
+                      loading={savingImportReview}
+                      disabled={!importForm.title.trim() || importForm.selectedImageIds.length === 0 || !importForm.sellerConfirmedText || !importForm.sellerConfirmedImages}
+                    >
+                      Save import review
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => runAiAction('analyze')} disabled={!supportsReviewActions}>
+                      Run AI diagnosis
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {editingMeta ? (
             <div className="space-y-3">
@@ -502,7 +1139,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           ) : (
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                {conversion.sourceAssets.map((asset) => (
+                {sourceAssetsForReview.map((asset) => (
                   <div key={asset.storageKey} className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
                     <img src={asset.url} alt={asset.storageKey} className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
                     <div className="min-w-0">
@@ -515,47 +1152,65 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               {product.description && <p className="text-sm text-gray-600">{product.description}</p>}
               <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
                 <span>{t(`category.${product.category}`)}</span>
-                {conversion.outputAsset && <span>{(conversion.outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>}
-                {qualityScore !== undefined && <span>Asset quality score: {qualityScore}/100</span>}
+                {outputAsset && <span>{(outputAsset.sizeBytes / 1024).toFixed(1)} KB GLB</span>}
+                {qaScore !== undefined && <span>QA score: {qaScore}/100</span>}
               </div>
-              {conversion.errorMessage && !conversion.qualityReport?.geminiQaReport && (
-                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{conversion.errorMessage}</div>
+              {conversion?.errorMessage && !conversion.qualityReport?.geminiQaReport && (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                  <p className="font-semibold">AI diagnosis failed</p>
+                  <p className="mt-1 text-xs">{conversion.errorMessage}</p>
+                </div>
               )}
-              {conversion.qualityReport?.geminiQaReport && (() => {
+              {conversion?.qualityReport?.geminiQaReport && (() => {
                 const qa = conversion.qualityReport.geminiQaReport!;
                 const score = conversion.qualityReport.score();
                 const isCritical = score < 40;
+                const isWarning = score >= 40 && score < 70;
                 return (
-                  <div className={`mt-3 rounded-xl p-3 text-sm ${isCritical ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
-                    <p className="font-semibold">
-                      Visual QA: {score}/100 —{' '}
-                      <span className="font-normal">{qa.status.replace(/_/g, ' ')}</span>
+                  <div className={`mt-3 rounded-xl border p-4 ${isCritical ? 'border-red-200 bg-red-50' : isWarning ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-sm font-semibold ${isCritical ? 'text-red-900' : isWarning ? 'text-amber-900' : 'text-emerald-900'}`}>
+                        AI Visual QA Diagnosis
+                      </p>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${isCritical ? 'bg-red-600 text-white' : isWarning ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'}`}>
+                        {score}/100
+                      </span>
+                    </div>
+                    <p className={`mt-1 text-xs capitalize ${isCritical ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {qa.status.replace(/_/g, ' ')} · Category match: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}
                     </p>
-                    <p className="mt-1 text-xs">
-                      Category match: {qa.categoryMatch.score}/10 — {qa.categoryMatch.reason}
-                    </p>
+
                     {qa.missingParts.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium">Missing parts:</p>
-                        <ul className={`mt-1 space-y-0.5 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
-                          {qa.missingParts.map((p) => <li key={p}>• {p}</li>)}
+                      <div className="mt-3">
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>Missing from 3D model</p>
+                        <ul className={`mt-1.5 space-y-1 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                          {qa.missingParts.map((p) => <li key={p} className="flex items-start gap-1.5"><span className="mt-0.5 font-bold">✕</span>{p}</li>)}
                         </ul>
                       </div>
                     )}
+
                     {qa.sourceImageIssues.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium">Source image issues:</p>
-                        <ul className={`mt-1 space-y-0.5 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
-                          {qa.sourceImageIssues.map((issue) => <li key={issue}>• {issue}</li>)}
+                      <div className="mt-3">
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>Source image issues</p>
+                        <ul className={`mt-1.5 space-y-1 text-xs ${isCritical ? 'text-red-700' : 'text-amber-700'}`}>
+                          {qa.sourceImageIssues.map((issue) => <li key={issue} className="flex items-start gap-1.5"><span className="mt-0.5">⚠</span>{issue}</li>)}
                         </ul>
                       </div>
                     )}
+
                     {qa.recommendedActions.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium">Recommended actions:</p>
-                        <ul className={`mt-1 space-y-0.5 text-xs font-medium ${isCritical ? 'text-red-800' : 'text-amber-800'}`}>
-                          {qa.recommendedActions.map((action) => <li key={action}>→ {action}</li>)}
+                      <div className="mt-3">
+                        <p className={`text-xs font-semibold uppercase tracking-wide ${isCritical ? 'text-red-800' : isWarning ? 'text-amber-800' : 'text-emerald-800'}`}>Recommended next actions</p>
+                        <ul className={`mt-1.5 space-y-1 text-xs font-medium ${isCritical ? 'text-red-900' : isWarning ? 'text-amber-900' : 'text-emerald-900'}`}>
+                          {qa.recommendedActions.map((action) => <li key={action} className="flex items-start gap-1.5"><span className="mt-0.5">→</span>{action}</li>)}
                         </ul>
+                      </div>
+                    )}
+
+                    {isCritical && (
+                      <div className="mt-4 rounded-lg bg-red-600 px-3 py-2">
+                        <p className="text-xs font-semibold text-white">Next action: Re-upload with more image angles</p>
+                        <p className="mt-0.5 text-[11px] text-red-100">Use at least 3 photos showing front, back, and side. Avoid busy backgrounds.</p>
                       </div>
                     )}
                   </div>
@@ -598,72 +1253,30 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         </Card>
 
         <div className="space-y-6">
-          <Card>
-            <h2 className="text-sm font-semibold text-gray-900">AI analysis</h2>
-            {product.aiAnalysis ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">Confidence</p>
-                    <p className="text-lg font-semibold text-gray-900">{Math.round(product.aiAnalysis.confidenceScore * 100)}%</p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">Readiness score</p>
-                    <p className="text-lg font-semibold text-gray-900">{product.aiAnalysis.readinessScore ?? '—'}</p>
-                  </div>
-                </div>
+          <AiDiagnosisPanel
+            analysis={product.aiAnalysis}
+            isLoading={diagnosisLoading}
+            error={diagnosisError}
+            hasConversion={supportsReviewActions}
+            onRunAnalysis={() => runAiAction('analyze')}
+          />
 
-                {product.aiAnalysis.materials.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Materials</p>
-                    <div className="flex flex-wrap gap-2">
-                      {product.aiAnalysis.materials.map((material) => (
-                        <span key={material} className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">{material}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          {/* E.12–E.15 — Model metadata card */}
+          {outputAsset && (
+            <ModelInfoCard
+              fileName={outputAsset.storageKey.split('/').pop() ?? 'model.glb'}
+              fileSizeBytes={outputAsset.sizeBytes}
+              uploadedAt={conversion?.updatedAt ?? product.updatedAt}
+              modelSource={conversion?.modelSource ?? 'ai-generated'}
+              onResetCamera={() => modelViewerRef.current?.resetCamera()}
+            />
+          )}
 
-                {product.aiAnalysis.missingVisuals.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Missing visuals</p>
-                    <ul className="space-y-2">
-                      {product.aiAnalysis.missingVisuals.map((item) => (
-                        <li key={item} className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {product.aiAnalysis.returnRiskFactors.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Return-risk factors</p>
-                    <ul className="space-y-2">
-                      {product.aiAnalysis.returnRiskFactors.map((factor) => (
-                        <li key={factor.risk} className="rounded-lg bg-rose-50 p-3">
-                          <p className="text-xs font-medium text-rose-900">{factor.risk}</p>
-                          <p className="mt-1 text-xs text-rose-700">{factor.fix}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {product.aiAnalysis.qualityRecommendations.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Quality recommendations</p>
-                    <ul className="space-y-2">
-                      {product.aiAnalysis.qualityRecommendations.map((item) => (
-                        <li key={item} className="rounded-lg bg-slate-50 p-3 text-xs text-slate-700">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-400">Run product analysis to generate merchant guidance.</p>
-            )}
-          </Card>
+          <SourceImageReadinessCard
+            readiness={sourceImageReadiness}
+            onUploadMissingViews={() => navigate('/upload')}
+            onContinueAnyway={() => navigate('/upload')}
+          />
 
           <Card>
             <div className="flex items-center justify-between">
@@ -728,21 +1341,27 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         </div>
       </div>
 
-      {editMode && hotspots.length > 0 && (
-        <Card>
-          <p className="mb-3 text-sm font-medium text-gray-700">Hotspots ({hotspots.length})</p>
-          <ul className="space-y-2">
-            {hotspots.map((hotspot) => (
-              <li key={hotspot.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                <div>
-                  <span className="text-gray-900">{hotspot.label}</span>
-                  {!hotspot.position && <span className="ml-2 text-xs text-amber-600">Needs placement</span>}
-                </div>
-                <button onClick={() => removeHotspot(hotspot.id)} className="text-xs text-red-500 hover:text-red-700">Remove</button>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      {editMode && (
+        <HotspotEditorPanel
+          hotspots={hotspots}
+          category={product?.category}
+          onUpdate={updateHotspot}
+          onDelete={removeHotspot}
+          onApprovalToggle={toggleHotspotApproval}
+          onValidate={() => {
+            const reports = HotspotQuality.validateAll(hotspots, product?.category);
+            const invalidCount = reports.filter((r) => r.status === 'invalid').length;
+            const warningCount = reports.filter((r) => r.status === 'warning').length;
+            if (invalidCount === 0 && warningCount === 0) {
+              setError(null);
+            } else {
+              setError(`Hotspot QA: ${invalidCount} invalid, ${warningCount} with warnings. Fix issues before publishing.`);
+            }
+          }}
+          onGenerateBetter={() => runAiAction('hotspots')}
+          generatingHotspots={busyAction === 'hotspots'}
+          publishBlocked={HotspotQuality.hasInvalidHotspots(hotspots, product?.category)}
+        />
       )}
 
       <Modal open={!!pendingHotspot} onClose={() => setPendingHotspot(null)} title="Name this hotspot">
@@ -874,9 +1493,9 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <Button
                 size="sm"
                 onClick={() => {
-                  if (!trendyolPublish.draft || !conversion.sourceAssets[0]) return;
+                  if (!trendyolPublish.draft || !sourceAssetsForReview[0]) return;
                   const barcode = `MB-${product.id.slice(0, 8).toUpperCase()}`;
-                  void trendyolPublish.publish(trendyolPublish.draft, conversion.sourceAssets[0].url, barcode);
+                  void trendyolPublish.publish(trendyolPublish.draft, sourceAssetsForReview[0].url, barcode);
                 }}
               >
                 {t('product.trendyolModal.publishBtn')}
@@ -929,6 +1548,35 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         )}
       </Modal>
 
+      <Modal open={overrideOpen} onClose={() => setOverrideOpen(false)} title="Approve with Override">
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            This product has quality issues (score 40–69). You are overriding the AI recommendation. Provide a reason to continue.
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Override reason (required)</label>
+            <textarea
+              autoFocus
+              rows={3}
+              value={overrideReason}
+              onChange={(event) => setOverrideReason(event.target.value)}
+              placeholder="e.g. Images already optimised for this category; risk accepted by seller."
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => { setOverrideOpen(false); setOverrideReason(''); }}>Cancel</Button>
+            <Button
+              onClick={() => handleApproveProduct(overrideReason.trim())}
+              loading={approvingProduct}
+              disabled={!overrideReason.trim()}
+            >
+              Approve Anyway
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={embedOpen} onClose={() => { setEmbedOpen(false); setCopied(false); }} title={t('product.embedModal.title')}>
         <div className="space-y-4">
           <p className="text-sm text-gray-500">{t('product.embedModal.description')}</p>
@@ -945,8 +1593,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
           <div className="rounded-xl bg-gray-900 p-4">
             <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-100">
               {embedType === 'iframe'
-                ? buildEmbedSnippet(conversion.outputAsset?.url ?? '', productName, product.id)
-                : buildModelViewerSnippet(conversion.outputAsset?.url ?? '')}
+                ? buildEmbedSnippet(outputAsset?.url ?? '', productName, product.id)
+                : buildModelViewerSnippet(outputAsset?.url ?? '')}
             </pre>
           </div>
 
@@ -956,8 +1604,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               size="sm"
               onClick={() => copySnippet(
                 embedType === 'iframe'
-                  ? buildEmbedSnippet(conversion.outputAsset?.url ?? '', productName, product.id)
-                  : buildModelViewerSnippet(conversion.outputAsset?.url ?? ''),
+                  ? buildEmbedSnippet(outputAsset?.url ?? '', productName, product.id)
+                  : buildModelViewerSnippet(outputAsset?.url ?? ''),
               )}
             >
               {t('product.embedModal.copyBtn')}

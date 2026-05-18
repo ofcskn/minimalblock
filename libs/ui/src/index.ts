@@ -17,6 +17,21 @@ export type { ModalProps } from './lib/components/Modal.js';
 export { StatusBadge } from './lib/components/StatusBadge.js';
 export type { StatusBadgeProps } from './lib/components/StatusBadge.js';
 
+export { WorkflowStatusBadge } from './lib/components/WorkflowStatusBadge.js';
+export type { WorkflowStatusBadgeProps } from './lib/components/WorkflowStatusBadge.js';
+
+export { AiDiagnosisPanel } from './lib/components/AiDiagnosisPanel.js';
+export type { AiDiagnosisPanelProps } from './lib/components/AiDiagnosisPanel.js';
+
+export { SourceImageReadinessCard } from './lib/components/SourceImageReadinessCard.js';
+export type { SourceImageReadinessCardProps } from './lib/components/SourceImageReadinessCard.js';
+
+export { ModelInfoCard } from './lib/components/ModelInfoCard.js';
+export type { ModelInfoCardProps } from './lib/components/ModelInfoCard.js';
+
+export { HotspotEditorPanel } from './lib/components/HotspotEditorPanel.js';
+export type { HotspotEditorPanelProps } from './lib/components/HotspotEditorPanel.js';
+
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';
@@ -107,7 +122,7 @@ export {
   ModelViewer,
   ModelViewerPlaceholder,
 } from './lib/3d-viewer/ModelViewer.js';
-export type { ModelViewerProps } from './lib/3d-viewer/ModelViewer.js';
+export type { ModelViewerProps, ModelViewerHandle } from './lib/3d-viewer/ModelViewer.js';
 
 // QR Code
 export { QrCode } from './lib/components/QrCode.js';

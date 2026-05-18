@@ -62,9 +62,10 @@ export class GeminiVisualQa {
     const imageUrls = input.sourceImageUrls.slice(0, 5);
     const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
 
+    const GEMINI_SUPPORTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
     for (const url of imageUrls) {
       const img = await fetchImageBase64(url);
-      if (img) {
+      if (img && GEMINI_SUPPORTED_MIME.has(img.mimeType)) {
         imageParts.push({ inlineData: img });
       }
     }

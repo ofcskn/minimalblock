@@ -11,10 +11,22 @@ export type EventType =
   | 'session_ended'
   | 'ai_analysis_started'
   | 'ai_analysis_completed'
+  | 'import_url_submitted'
+  | 'import_scrape_started'
+  | 'import_scrape_completed'
+  | 'import_scrape_failed'
+  | 'import_images_extracted'
+  | 'import_images_selected'
+  | 'import_autofill_completed'
+  | 'import_fields_edited'
+  | 'import_moved_to_source_readiness'
+  | 'import_manual_fallback_used'
   | 'hotspot_suggestion_accepted'
   | 'conversion_approved'
   | 'conversion_rejected'
-  | 'product_published';
+  | 'product_published'
+  | 'product_approved'
+  | 'product_approved_with_override';
 
 export interface ProductStats {
   productId: string;

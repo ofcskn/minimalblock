@@ -3,6 +3,7 @@ import {
   IProductRepository,
   Hotspot,
   ProductAiAnalysis,
+  ProductImportData,
   SuggestedHotspot,
   migrateLegacyProductCategory,
 } from '@minimalblock/core';
@@ -25,6 +26,11 @@ function rowToProduct(row: ProductRow): Product {
       : [],
     aiAnalysis: row.ai_insights && !Array.isArray(row.ai_insights)
       ? (row.ai_insights as unknown as ProductAiAnalysis)
+      : null,
+    workflowStatus: row.workflow_status as Product['workflowStatus'],
+    inputMethod: row.input_method as Product['inputMethod'],
+    importData: row.import_data && !Array.isArray(row.import_data)
+      ? (row.import_data as unknown as ProductImportData)
       : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
@@ -70,6 +76,11 @@ export class SupabaseProductRepository implements IProductRepository {
         hotspots_suggested_at: product.hotspotsSuggested.length > 0 ? new Date().toISOString() : null,
         ai_insights: product.aiAnalysis
           ? product.aiAnalysis as unknown as import('../supabase/database.types.js').Json
+          : null,
+        workflow_status: product.workflowStatus,
+        input_method: product.inputMethod,
+        import_data: product.importData
+          ? product.importData as unknown as import('../supabase/database.types.js').Json
           : null,
       })
       .select()

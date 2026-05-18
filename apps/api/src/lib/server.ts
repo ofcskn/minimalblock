@@ -6,7 +6,10 @@ import {
   Product,
   GenerationJob,
   MediaAsset,
+  ProductWorkflowStatus,
   QualityReport,
+  SourceImageReadiness,
+  deriveViewLabel,
   generateId,
   migrateLegacyProductCategory,
   type AnalyzeProductRequest,
@@ -21,13 +24,19 @@ import {
   type GenerateHotspotsRequest,
   type GenerateHotspotsResponse,
   type GeminiQaResult,
+  type ImportProductUrlRequest,
+  type ImportProductUrlResponse,
   type ProductAiAnalysis,
   type ProductAiCopy,
+  type ProductImportSnapshot,
   type QualityCheckRequest,
   type QualityCheckResponse,
   type RejectConversionRequest,
+  type RetryImportedProductResponse,
   type ReturnRiskRequest,
   type ReturnRiskResponse,
+  type SaveImportedReviewRequest,
+  type SaveImportedReviewResponse,
   type SuggestedHotspot,
   type SuggestedHotspotType,
 } from '@minimalblock/core';
@@ -39,6 +48,7 @@ import {
 } from '@minimalblock/data';
 import { createGenerativeModel, ANALYSIS_MODEL_ID, GeminiModelGenerator, GeminiVisualQa, buildTrendyolListingPrompt } from '@minimalblock/ai';
 import { TrendyolClient } from '@minimalblock/trendyol';
+import { ProductImportService } from './product-import.service.js';
 import type {
   BatchResult as TrendyolBatchResult,
   ShipmentPackagesParams,
@@ -297,6 +307,18 @@ function toConversionSnapshot(conversion: Conversion): ConversionSnapshot {
   };
 }
 
+function toProductImportSnapshot(product: Product): ProductImportSnapshot {
+  return {
+    productId: product.id,
+    name: product.name,
+    description: product.description,
+    category: product.category,
+    workflowStatus: product.workflowStatus,
+    inputMethod: product.inputMethod,
+    importData: product.importData,
+  };
+}
+
 async function getOwnedProduct(ctx: RequestContext, productId: string): Promise<Product> {
   const productRepo = new SupabaseProductRepository(ctx.admin);
   const product = await productRepo.findById(productId);
@@ -336,7 +358,11 @@ function mergeAnalysis(product: Product, patch: Partial<ProductAiAnalysis>): Pro
   };
 }
 
-async function analyzeProductWithGemini(ctx: RequestContext, product: Product, sourceAsset?: MediaAsset): Promise<ProductAiAnalysis> {
+function getImportedSourceAssets(product: Product): MediaAsset[] {
+  return ProductImportService.toImportedMediaAssets(product.importData);
+}
+
+async function analyzeProductWithGemini(ctx: RequestContext, product: Product, sourceAssets: MediaAsset[] = []): Promise<ProductAiAnalysis> {
   const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     {
@@ -357,7 +383,8 @@ async function analyzeProductWithGemini(ctx: RequestContext, product: Product, s
     },
   ];
 
-  if (sourceAsset) {
+  const GEMINI_SUPPORTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  for (const sourceAsset of sourceAssets.filter((a) => GEMINI_SUPPORTED_MIME.has(a.mimeType)).slice(0, 3)) {
     parts.push({ inlineData: await fetchAssetBase64(sourceAsset) });
   }
 
@@ -389,7 +416,7 @@ async function analyzeProductWithGemini(ctx: RequestContext, product: Product, s
   };
 }
 
-async function generateSuggestedHotspots(ctx: RequestContext, product: Product, sourceAsset?: MediaAsset): Promise<SuggestedHotspot[]> {
+async function generateSuggestedHotspots(ctx: RequestContext, product: Product, sourceAssets: MediaAsset[] = []): Promise<SuggestedHotspot[]> {
   const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     {
@@ -399,7 +426,8 @@ async function generateSuggestedHotspots(ctx: RequestContext, product: Product, 
         `Product: ${product.name}\nCategory: ${product.category}\nDescription: ${product.description || 'n/a'}`,
     },
   ];
-  if (sourceAsset) {
+  const GEMINI_SUPPORTED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  for (const sourceAsset of sourceAssets.filter((a) => GEMINI_SUPPORTED_MIME.has(a.mimeType)).slice(0, 2)) {
     parts.push({ inlineData: await fetchAssetBase64(sourceAsset) });
   }
   const result = await model.generateContent(parts);
@@ -411,6 +439,194 @@ async function generateSuggestedHotspots(ctx: RequestContext, product: Product, 
     type: toSuggestedHotspotType(item.type),
     status: 'pending',
   }));
+}
+
+function importedReadiness(product: Product): SourceImageReadiness | null {
+  if (!product.importData) return null;
+  const entries = product.importData.imageCandidates
+    .filter((candidate) => candidate.selected && candidate.storageKey && candidate.url && candidate.sizeBytes !== undefined)
+    .map((candidate) => ({
+      storageKey: candidate.storageKey!,
+      url: candidate.url!,
+      sizeBytes: candidate.sizeBytes!,
+      viewLabel: deriveViewLabel(candidate.storageKey!),
+      widthPx: candidate.widthPx,
+      heightPx: candidate.heightPx,
+      warnings: candidate.warnings.filter((warning) =>
+        warning === 'low_resolution'
+        || warning === 'likely_duplicate'
+        || warning === 'likely_cropped'
+        || warning === 'background_inconsistent'
+        || warning === 'angle_unclear',
+      ) as Array<'low_resolution' | 'likely_duplicate' | 'likely_cropped' | 'background_inconsistent' | 'angle_unclear'>,
+    }));
+
+  return entries.length > 0 ? SourceImageReadiness.fromEntries(entries) : null;
+}
+
+async function handleImportProductUrl(ctx: RequestContext, req: ImportProductUrlRequest): Promise<ImportProductUrlResponse> {
+  if (!req.url?.trim()) throw new Error('Invalid request');
+
+  const productRepo = new SupabaseProductRepository(ctx.admin);
+  const eventsRepo = new SupabaseEventsRepository(ctx.admin);
+  const now = new Date();
+
+  let product = await productRepo.save(
+    new Product({
+      id: generateId(),
+      name: 'Importing product…',
+      description: '',
+      category: 'other',
+      ownerId: ctx.user.id,
+      hotspots: [],
+      hotspotsSuggested: [],
+      aiAnalysis: null,
+      workflowStatus: 'url_submitted',
+      inputMethod: 'url_import',
+      importData: null,
+      createdAt: now,
+      updatedAt: now,
+    }),
+  );
+
+  await eventsRepo.track(product.id, ctx.user.id, 'import_url_submitted', { source_url: req.url });
+  product = await productRepo.save(product.withWorkflowStatus('scraping'));
+  await eventsRepo.track(product.id, ctx.user.id, 'import_scrape_started');
+
+  const service = new ProductImportService({
+    admin: ctx.admin,
+    ownerId: ctx.user.id,
+    geminiApiKey: ctx.env.geminiApiKey,
+  });
+  const imported = await service.importFromUrl(req.url);
+
+  product = await productRepo.save(
+    product
+      .withUpdatedMeta({
+        name: imported.productName,
+        description: imported.productDescription,
+        category: imported.productCategory,
+      })
+      .withImportData(imported.importData)
+      .withWorkflowStatus(imported.workflowStatus),
+  );
+
+  if (imported.workflowStatus === 'scrape_failed') {
+    await eventsRepo.track(product.id, ctx.user.id, 'import_scrape_failed', { reasons: imported.importData.failureReasons });
+  } else {
+    await eventsRepo.track(product.id, ctx.user.id, 'import_scrape_completed', { confidence: imported.importData.overallConfidence });
+    await eventsRepo.track(product.id, ctx.user.id, 'import_images_extracted', { count: imported.importData.imageCandidates.length });
+    await eventsRepo.track(product.id, ctx.user.id, 'import_autofill_completed', { missing_fields: imported.importData.missingFields ?? [] });
+  }
+
+  return { product: toProductImportSnapshot(product) };
+}
+
+async function handleSaveImportedReview(
+  ctx: RequestContext,
+  productId: string,
+  req: SaveImportedReviewRequest,
+): Promise<SaveImportedReviewResponse> {
+  if (!req.title?.trim() || !req.selectedImageIds?.length || !req.sellerConfirmedText || !req.sellerConfirmedImages) {
+    throw new Error('Invalid request');
+  }
+
+  const productRepo = new SupabaseProductRepository(ctx.admin);
+  const eventsRepo = new SupabaseEventsRepository(ctx.admin);
+  const product = await getOwnedProduct(ctx, productId);
+  if (!product.importData) throw new Error('Invalid request');
+
+  const reviewed = product.withImportedReview({
+    name: req.title.trim(),
+    description: req.description.trim(),
+    category: req.category,
+    materials: req.materials,
+    dimensions: req.dimensions.trim(),
+    selectedImageIds: req.selectedImageIds,
+    sellerConfirmedText: req.sellerConfirmedText,
+    sellerConfirmedImages: req.sellerConfirmedImages,
+  }).withWorkflowStatus('source_readiness_pending');
+
+  const sourceAssets = getImportedSourceAssets(reviewed);
+  if (sourceAssets.length === 0) throw new Error('Invalid request');
+
+  const readiness = importedReadiness(reviewed) ?? SourceImageReadiness.fromMediaAssets(sourceAssets);
+  const aiAnalysis = await analyzeProductWithGemini(ctx, reviewed, sourceAssets);
+  const combinedReadinessScore = Math.round(((aiAnalysis.readinessScore ?? readiness.score) + readiness.score) / 2);
+  const normalizedReadinessScore = readiness.hasEnoughUniqueViews ? combinedReadinessScore : Math.min(combinedReadinessScore, 65);
+  const merged = mergeAnalysis(reviewed, {
+    ...aiAnalysis,
+    materials: req.materials,
+    readinessScore: normalizedReadinessScore,
+    finalQualityScore: aiAnalysis.finalQualityScore ?? normalizedReadinessScore,
+    visualMatchScore: aiAnalysis.visualMatchScore ?? normalizedReadinessScore,
+    commerceReadinessScore: aiAnalysis.commerceReadinessScore ?? normalizedReadinessScore,
+    missingVisuals: readiness.missingViews.map((view) => `${view} view`),
+    qualityRecommendations: Array.from(new Set([
+      ...readiness.weakImages.flatMap((image) => image.warnings.map((warning) => `Fix ${warning.replace(/_/g, ' ')} on ${image.storageKey.split('/').pop()}`)),
+      ...aiAnalysis.qualityRecommendations,
+    ])),
+    merchantRecommendations: Array.from(new Set([
+      ...(reviewed.importData?.warnings ?? []),
+      ...aiAnalysis.merchantRecommendations,
+    ])),
+    sourceImageEntries: readiness.entries,
+  });
+
+  const saved = await productRepo.save(
+    reviewed
+      .withAiAnalysis(merged)
+      .withWorkflowStatus(ProductWorkflowStatus.deriveFromAiAnalysis(merged).value),
+  );
+
+  await eventsRepo.track(saved.id, ctx.user.id, 'import_images_selected', { count: req.selectedImageIds.length });
+  if (saved.importData?.sellerEditedFields.length) {
+    await eventsRepo.track(saved.id, ctx.user.id, 'import_fields_edited', { fields: saved.importData.sellerEditedFields });
+  }
+  await eventsRepo.track(saved.id, ctx.user.id, 'import_moved_to_source_readiness', { readiness_score: normalizedReadinessScore });
+
+  return {
+    product: toProductImportSnapshot(saved),
+    selectedImages: saved.importData?.imageCandidates.filter((candidate) => candidate.selected) ?? [],
+    readinessScore: normalizedReadinessScore,
+  };
+}
+
+async function handleRetryImportedProduct(ctx: RequestContext, productId: string): Promise<RetryImportedProductResponse> {
+  const productRepo = new SupabaseProductRepository(ctx.admin);
+  const eventsRepo = new SupabaseEventsRepository(ctx.admin);
+  const existing = await getOwnedProduct(ctx, productId);
+  const sourceUrl = existing.importData?.sourceUrl;
+  if (!sourceUrl) throw new Error('Invalid request');
+
+  await eventsRepo.track(existing.id, ctx.user.id, 'import_scrape_started', { retry: true });
+  let product = await productRepo.save(existing.withWorkflowStatus('scraping'));
+  const service = new ProductImportService({
+    admin: ctx.admin,
+    ownerId: ctx.user.id,
+    geminiApiKey: ctx.env.geminiApiKey,
+  });
+  const imported = await service.importFromUrl(sourceUrl);
+  product = await productRepo.save(
+    product
+      .withUpdatedMeta({
+        name: imported.productName,
+        description: imported.productDescription,
+        category: imported.productCategory,
+      })
+      .withImportData(imported.importData)
+      .withWorkflowStatus(imported.workflowStatus),
+  );
+
+  if (imported.workflowStatus === 'scrape_failed') {
+    await eventsRepo.track(product.id, ctx.user.id, 'import_scrape_failed', { reasons: imported.importData.failureReasons, retry: true });
+  } else {
+    await eventsRepo.track(product.id, ctx.user.id, 'import_scrape_completed', { confidence: imported.importData.overallConfidence, retry: true });
+    await eventsRepo.track(product.id, ctx.user.id, 'import_images_extracted', { count: imported.importData.imageCandidates.length, retry: true });
+    await eventsRepo.track(product.id, ctx.user.id, 'import_autofill_completed', { missing_fields: imported.importData.missingFields ?? [], retry: true });
+  }
+
+  return { product: toProductImportSnapshot(product) };
 }
 
 async function generateSuggestedCopy(ctx: RequestContext, product: Product): Promise<ProductAiCopy | null> {
@@ -433,31 +649,13 @@ async function generateReturnRisk(ctx: RequestContext, product: Product): Promis
   return parseJsonText<Array<{ risk: string; fix: string }>>(result.response.text());
 }
 
-async function handleCreateConversion(ctx: RequestContext, req: CreateConversionRequest): Promise<CreateConversionResponse> {
-  if (!req.product?.name || !req.sourceAssets?.length) {
-    throw new Error('Invalid request');
-  }
-
-  const productRepo = new SupabaseProductRepository(ctx.admin);
+async function createConversionForProduct(
+  ctx: RequestContext,
+  product: Product,
+  req: Pick<CreateConversionRequest, 'sourceAssets' | 'manualModelAsset' | 'qualityHint'>,
+): Promise<CreateConversionResponse> {
   const conversionRepo = new SupabaseConversionRepository(ctx.admin);
   const jobRepo = new SupabaseGenerationJobRepository(ctx.admin);
-
-  const now = new Date();
-  const product = await productRepo.save(
-    new Product({
-      id: generateId(),
-      name: req.product.name,
-      description: req.product.description ?? '',
-      category: migrateLegacyProductCategory(req.product.category),
-      ownerId: ctx.user.id,
-      hotspots: [],
-      hotspotsSuggested: [],
-      aiAnalysis: null,
-      createdAt: now,
-      updatedAt: now,
-    }),
-  );
-
   const sourceAssets = req.sourceAssets.map((asset) => toMediaAsset(asset, 'source-image'));
   let conversion = Conversion.create(generateId(), product.id, ctx.user.id, sourceAssets[0], sourceAssets);
   conversion = await conversionRepo.save(conversion);
@@ -551,6 +749,48 @@ async function handleCreateConversion(ctx: RequestContext, req: CreateConversion
   };
 }
 
+async function handleCreateConversion(ctx: RequestContext, req: CreateConversionRequest): Promise<CreateConversionResponse> {
+  if (!req.product?.name || !req.sourceAssets?.length) {
+    throw new Error('Invalid request');
+  }
+
+  const productRepo = new SupabaseProductRepository(ctx.admin);
+
+  const now = new Date();
+  const product = await productRepo.save(
+    new Product({
+      id: generateId(),
+      name: req.product.name,
+      description: req.product.description ?? '',
+      category: migrateLegacyProductCategory(req.product.category),
+      ownerId: ctx.user.id,
+      hotspots: [],
+      hotspotsSuggested: [],
+      aiAnalysis: null,
+      inputMethod: req.manualModelAsset ? 'manual_glb' : 'manual_upload',
+      createdAt: now,
+      updatedAt: now,
+    }),
+  );
+
+  return createConversionForProduct(ctx, product, req);
+}
+
+async function handleTryImportedProduct3d(ctx: RequestContext, productId: string): Promise<CreateConversionResponse> {
+  const product = await getOwnedProduct(ctx, productId);
+  const sourceAssets = getImportedSourceAssets(product);
+  if (sourceAssets.length === 0) throw new Error('Invalid request');
+
+  return createConversionForProduct(ctx, product, {
+    sourceAssets: sourceAssets.map((asset) => ({
+      url: asset.url,
+      storageKey: asset.storageKey,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes,
+    })),
+  });
+}
+
 async function handleGetConversion(ctx: RequestContext, conversionId: string): Promise<ConversionResponse> {
   const conversion = await getOwnedConversion(ctx, conversionId);
   return { conversion: toConversionSnapshot(conversion) };
@@ -584,8 +824,9 @@ async function handleAnalyzeProduct(ctx: RequestContext, req: AnalyzeProductRequ
   const eventsRepo = new SupabaseEventsRepository(ctx.admin);
   const product = await getOwnedProduct(ctx, req.productId);
   const conversion = await getLatestConversionForProduct(ctx, product.id);
+  const sourceAssets = getImportedSourceAssets(product);
   await eventsRepo.track(product.id, ctx.user.id, 'ai_analysis_started');
-  const analysis = await analyzeProductWithGemini(ctx, product, conversion?.sourceAssets[0]);
+  const analysis = await analyzeProductWithGemini(ctx, product, sourceAssets.length > 0 ? sourceAssets : [...(conversion?.sourceAssets ?? [])]);
   const saved = await productRepo.save(product.withAiAnalysis(analysis));
   await eventsRepo.track(product.id, ctx.user.id, 'ai_analysis_completed');
   return { analysis: saved.aiAnalysis ?? analysis };
@@ -598,7 +839,8 @@ async function handleGenerateHotspots(
   const productRepo = new SupabaseProductRepository(ctx.admin);
   const product = await getOwnedProduct(ctx, req.productId);
   const conversion = await getLatestConversionForProduct(ctx, product.id);
-  const hotspots = await generateSuggestedHotspots(ctx, product, conversion?.sourceAssets[0]);
+  const sourceAssets = getImportedSourceAssets(product);
+  const hotspots = await generateSuggestedHotspots(ctx, product, sourceAssets.length > 0 ? sourceAssets : [...(conversion?.sourceAssets ?? [])]);
   const saved = await productRepo.save(product.withSuggestedHotspots(hotspots));
   return { hotspots: saved.hotspotsSuggested };
 }
@@ -626,6 +868,7 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
   const productRepo = new SupabaseProductRepository(ctx.admin);
   const product = await getOwnedProduct(ctx, req.productId);
   const conversion = await getLatestConversionForProduct(ctx, product.id);
+  const importReadiness = importedReadiness(product);
 
   let qaRecommendations: string[] = conversion?.qualityReport?.geminiQaReport?.recommendedActions ?? [];
 
@@ -667,15 +910,19 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
     ...(conversion?.sourceAssets.length && conversion.sourceAssets.length < 3
       ? ['Add more source angles before publishing to improve 3D fidelity.']
       : []),
+    ...(importReadiness && !importReadiness.hasEnoughUniqueViews
+      ? ['Add more unique imported product angles before publishing.']
+      : []),
     ...(conversion?.qualityReport?.warnings ?? []),
     ...qaRecommendations,
   ];
-  const readinessScore = conversion?.qualityReport?.score() ?? product.aiAnalysis?.readinessScore;
+  const readinessScore = conversion?.qualityReport?.score() ?? importReadiness?.score ?? product.aiAnalysis?.readinessScore;
 
   await productRepo.save(
     product.withAiAnalysis(
       mergeAnalysis(product, {
         readinessScore,
+        sourceImageEntries: importReadiness?.entries ?? product.aiAnalysis?.sourceImageEntries,
         qualityRecommendations: recommendations,
       }),
     ),
@@ -827,6 +1074,31 @@ export function createApiServer(env = getEnv()) {
       if (req.method === 'POST' && pathname === '/api/conversions') {
         const body = await readJson<CreateConversionRequest>(req);
         sendJson(res, 200, await handleCreateConversion(ctx, body), env.corsOrigin);
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/products/import-url') {
+        const body = await readJson<ImportProductUrlRequest>(req);
+        sendJson(res, 200, await handleImportProductUrl(ctx, body), env.corsOrigin);
+        return;
+      }
+
+      const importReviewMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/review$/);
+      if (req.method === 'POST' && importReviewMatch) {
+        const body = await readJson<SaveImportedReviewRequest>(req);
+        sendJson(res, 200, await handleSaveImportedReview(ctx, importReviewMatch[1], body), env.corsOrigin);
+        return;
+      }
+
+      const importRetryMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/retry$/);
+      if (req.method === 'POST' && importRetryMatch) {
+        sendJson(res, 200, await handleRetryImportedProduct(ctx, importRetryMatch[1]), env.corsOrigin);
+        return;
+      }
+
+      const import3dMatch = pathname.match(/^\/api\/products\/([^/]+)\/try-3d$/);
+      if (req.method === 'POST' && import3dMatch) {
+        sendJson(res, 200, await handleTryImportedProduct3d(ctx, import3dMatch[1]), env.corsOrigin);
         return;
       }
 
