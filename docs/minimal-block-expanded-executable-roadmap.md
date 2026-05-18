@@ -615,9 +615,17 @@ Executable steps:
 
 - Good product can move to merchant review.
 
-# Phase 3 — AI Diagnosis Panel
+# Phase 3 — AI Diagnosis Panel ✓ COMPLETE (2026-05-18)
 ## Objective
 Turn AI analysis from simple scores into a clear decision and action panel.
+
+## Implementation Summary
+- Extended `ProductAiAnalysis` with Phase 3 fields: `visualMatchScore`, `commerceReadinessScore`, `finalQualityScore`, `detectedCategory`, `expectedCategory`, `conversionResult`, `blockingReasons`, `missingParts`, `sellerExplanation`, `analysisVersion`, `analysisHistory` (`AiDiagnosisAttempt[]`)
+- Created `AiDiagnosisPanel` component in `libs/ui` with all states: loading, error, empty, and results
+- Panel shows: all 5 scores with progress bars, score delta from history, blocking reasons, missing parts, recommended actions, seller-friendly explanation, category match, conversion result badge, timestamp, version, "AI Recommendation" label, disclaimer
+- Mock data updated: laptop failed scenario (missing keyboard/trackpad/hinge/screen), warning scenario with history, success scenario with history
+- `ProductDetailPage` updated to use `AiDiagnosisPanel` replacing the inline AI analysis card
+- Tests: 131 core tests pass, 28 UI tests pass (includes `product.entity.spec.ts` and `AiDiagnosisPanel.spec.tsx`)
 
 ## TODO
 C.1. Show confidence score
