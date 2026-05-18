@@ -17,7 +17,9 @@ import {
   type Hotspot,
   type Product,
   type ProductCategory,
+  type ProductCluster,
 } from '@minimalblock/core';
+import { MultiProductClusterSelector } from '../components/import/MultiProductClusterSelector.js';
 import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, HotspotEditorPanel, type ModelViewerHandle } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
@@ -979,6 +981,20 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                 </div>
               )}
 
+              {product.importData.multiProductDetected && product.importData.productClusters && product.importData.productClusters.length > 0 && (
+                <div className="mt-4">
+                  <MultiProductClusterSelector
+                    clusters={product.importData.productClusters as ProductCluster[]}
+                    imageCandidates={product.importData.imageCandidates}
+                    onAccept={async (clusterId) => {
+                      await apiClient.acceptProductCluster(product.id, { clusterId });
+                      const refreshed = await productRepo.findById(product.id);
+                      if (refreshed) setProduct(refreshed);
+                    }}
+                  />
+                </div>
+              )}
+
               {isImportReviewState && (
                 <div className="mt-4 space-y-4">
                   <div className="grid gap-3 md:grid-cols-2">
@@ -1059,8 +1075,23 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                                 )}
                                 <p className="mt-2 truncate text-xs font-medium text-gray-800">{candidate.storageKey?.split('/').pop() ?? `Imported image ${candidate.ordinal + 1}`}</p>
                                 <p className="mt-1 truncate text-[11px] text-gray-500">{candidate.sourceUrl}</p>
-                                {(candidate.warnings.length > 0 || candidate.failureReasons?.length) && (
+                                {(candidate.warnings.length > 0 || candidate.failureReasons?.length || candidate.aiRejected || candidate.aiRelevanceScore !== undefined || candidate.viewAngle) && (
                                   <div className="mt-2 flex flex-wrap gap-1">
+                                    {candidate.aiRejected && (
+                                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                                        Rejected: {candidate.aiRejectionReason ?? 'ai'}
+                                      </span>
+                                    )}
+                                    {candidate.aiRelevanceScore !== undefined && !candidate.aiRejected && (
+                                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                                        {Math.round(candidate.aiRelevanceScore * 100)}% relevance
+                                      </span>
+                                    )}
+                                    {candidate.viewAngle && candidate.viewAngle !== 'unknown' && !candidate.aiRejected && (
+                                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                                        {candidate.viewAngle}
+                                      </span>
+                                    )}
                                     {candidate.warnings.map((warning) => (
                                       <span key={warning} className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">{warning.replace(/_/g, ' ')}</span>
                                     ))}
