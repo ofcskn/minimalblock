@@ -32,6 +32,8 @@ import {
   type QualityCheckRequest,
   type QualityCheckResponse,
   type RejectConversionRequest,
+  type AcceptProductClusterRequest,
+  type AcceptProductClusterResponse,
   type RetryImportedProductResponse,
   type ReturnRiskRequest,
   type ReturnRiskResponse,
@@ -592,6 +594,59 @@ async function handleSaveImportedReview(
   };
 }
 
+async function handleAcceptProductCluster(
+  ctx: RequestContext,
+  productId: string,
+  req: AcceptProductClusterRequest,
+): Promise<AcceptProductClusterResponse> {
+  if (!req.clusterId) throw new Error('Invalid request');
+
+  const productRepo = new SupabaseProductRepository(ctx.admin);
+  const product = await getOwnedProduct(ctx, productId);
+
+  if (!product.importData?.multiProductDetected || !product.importData.productClusters?.length) {
+    throw new Error('Product does not have multi-product clusters');
+  }
+
+  const cluster = product.importData.productClusters.find((c) => c.clusterId === req.clusterId);
+  if (!cluster) throw new Error('Cluster not found');
+
+  const clusterImageIds = new Set(cluster.imageIds);
+  const scopedCandidates = product.importData.imageCandidates.map((candidate) => ({
+    ...candidate,
+    selected: clusterImageIds.has(candidate.id),
+  }));
+
+  const scopedImportData = {
+    ...product.importData,
+    fields: {
+      ...product.importData.fields,
+      ...(cluster.fields.title ? { title: cluster.fields.title } : {}),
+      ...(cluster.fields.description ? { description: cluster.fields.description } : {}),
+      ...(cluster.fields.category ? { category: cluster.fields.category } : {}),
+      ...(cluster.fields.materials ? { materials: cluster.fields.materials } : {}),
+      ...(cluster.fields.dimensions ? { dimensions: cluster.fields.dimensions } : {}),
+    },
+    imageCandidates: scopedCandidates,
+    selectedImageIds: cluster.imageIds,
+    multiProductDetected: false,
+    productClusters: undefined,
+    primaryClusterId: cluster.clusterId,
+    ...(cluster.materialFinish ? { inferredMaterialFinish: cluster.materialFinish } : {}),
+    ...(cluster.geometryComplexity ? { inferredGeometryComplexity: cluster.geometryComplexity } : {}),
+  };
+
+  const clusterName = cluster.fields.title?.value ?? product.name;
+  const clusterCategory = cluster.fields.category?.value ?? product.category;
+  const saved = await productRepo.save(
+    product
+      .withImportData(scopedImportData)
+      .withUpdatedMeta({ name: clusterName, category: clusterCategory }),
+  );
+
+  return { product: toProductImportSnapshot(saved) };
+}
+
 async function handleRetryImportedProduct(ctx: RequestContext, productId: string): Promise<RetryImportedProductResponse> {
   const productRepo = new SupabaseProductRepository(ctx.admin);
   const eventsRepo = new SupabaseEventsRepository(ctx.admin);
@@ -1093,6 +1148,13 @@ export function createApiServer(env = getEnv()) {
       const importRetryMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/retry$/);
       if (req.method === 'POST' && importRetryMatch) {
         sendJson(res, 200, await handleRetryImportedProduct(ctx, importRetryMatch[1]), env.corsOrigin);
+        return;
+      }
+
+      const acceptClusterMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/accept-cluster$/);
+      if (req.method === 'POST' && acceptClusterMatch) {
+        const body = await readJson<AcceptProductClusterRequest>(req);
+        sendJson(res, 200, await handleAcceptProductCluster(ctx, acceptClusterMatch[1], body), env.corsOrigin);
         return;
       }
 
