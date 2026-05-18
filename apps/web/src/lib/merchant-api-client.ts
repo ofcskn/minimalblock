@@ -1,4 +1,6 @@
 import type {
+  AcceptProductClusterRequest,
+  AcceptProductClusterResponse,
   AnalyzeProductResponse,
   ConversionResponse,
   CreateConversionRequest,
@@ -123,6 +125,13 @@ export class MerchantApiClient {
     return this.request<RetryImportedProductResponse>(`/api/products/${productId}/import/retry`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+  }
+
+  acceptProductCluster(productId: string, input: AcceptProductClusterRequest): Promise<AcceptProductClusterResponse> {
+    return this.request<AcceptProductClusterResponse>(`/api/products/${productId}/import/accept-cluster`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     });
   }
 
