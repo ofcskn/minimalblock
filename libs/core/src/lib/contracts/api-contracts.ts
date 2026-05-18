@@ -140,3 +140,11 @@ export interface SaveImportedReviewResponse {
 export interface RetryImportedProductResponse {
   product: ProductImportSnapshot;
 }
+
+export interface AcceptProductClusterRequest {
+  clusterId: string;
+}
+
+export interface AcceptProductClusterResponse {
+  product: ProductImportSnapshot;
+}
