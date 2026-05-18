@@ -20,6 +20,12 @@ export interface ImportedField<T> {
   originalValue?: T;
 }
 
+export type ImageClass = 'product-hero' | 'product-detail' | 'lifestyle' | 'logo' | 'banner' | 'ui-asset' | 'icon' | 'unknown';
+export type ImageViewAngle = 'front' | 'back' | 'left' | 'right' | 'top' | 'detail' | 'lifestyle' | 'unknown';
+export type MaterialFinish = 'matte' | 'glossy' | 'brushed-metal' | 'fabric' | 'glass' | 'wood' | 'ceramic' | 'leather' | 'unknown';
+export type GeometryComplexity = 'simple' | 'moderate' | 'complex' | 'compound';
+export type GeometrySymmetry = 'symmetric' | 'asymmetric' | 'radial';
+
 export interface ImportedImageCandidate {
   id: string;
   sourceUrl: string;
@@ -36,6 +42,38 @@ export interface ImportedImageCandidate {
   heightPx?: number;
   alt?: string;
   title?: string;
+  // APUS — AI image intelligence fields
+  aiImageClass?: ImageClass;
+  aiRelevanceScore?: number;
+  aiRejected?: boolean;
+  aiRejectionReason?: string;
+  perceptualHash?: string;
+  variantKey?: string;
+  viewAngle?: ImageViewAngle;
+}
+
+export interface ProductVariantGroup {
+  variantType: 'color' | 'size' | 'material' | 'style';
+  values: string[];
+  imageIdsByValue: Record<string, string[]>;
+}
+
+export interface ProductCluster {
+  clusterId: string;
+  clusterLabel: string;
+  confidence: ImportFieldConfidence;
+  fields: {
+    title?: ImportedField<string>;
+    description?: ImportedField<string>;
+    category?: ImportedField<ProductCategory>;
+    materials?: ImportedField<string[]>;
+    dimensions?: ImportedField<string>;
+  };
+  imageIds: string[];
+  variants?: ProductVariantGroup[];
+  materialFinish?: MaterialFinish;
+  geometryComplexity?: GeometryComplexity;
+  geometrySymmetry?: GeometrySymmetry;
 }
 
 export interface ProductImportData {
@@ -63,6 +101,34 @@ export interface ProductImportData {
   sellerConfirmedImages: boolean;
   missingFields?: string[];
   raw?: Record<string, unknown>;
+  // APUS — multi-product detection
+  productClusters?: ProductCluster[];
+  primaryClusterId?: string;
+  multiProductDetected?: boolean;
+  // APUS — page semantic analysis
+  pageRegions?: {
+    hasGalleryCarousel: boolean;
+    hasSpecificationTable: boolean;
+    hasVariantSelector: boolean;
+    hasRecommendationWidget: boolean;
+  };
+  // APUS — image intelligence summary
+  imageIntelligence?: {
+    totalCandidatesBeforeFiltering: number;
+    rejectedByAi: number;
+    duplicatesRemoved: number;
+    variantImagesDetected: number;
+  };
+  // APUS — material and geometry inference
+  inferredMaterialFinish?: MaterialFinish;
+  inferredGeometryComplexity?: GeometryComplexity;
+  // APUS — field conflict audit trail
+  fieldConflicts?: Array<{
+    field: string;
+    scraperValue: unknown;
+    aiValue: unknown;
+    resolution: 'used-scraper' | 'used-ai' | 'flagged-for-review';
+  }>;
 }
 
 export interface Hotspot {
