@@ -1,0 +1,12 @@
+{
+  "name": "api",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "@minimalblock/ai": "workspace:*",
+    "@minimalblock/core": "workspace:*",
+    "@minimalblock/data": "workspace:*",
+    "@minimalblock/trendyol": "workspace:*",
+    "@supabase/supabase-js": "^2.105.4"
+  }
+}
