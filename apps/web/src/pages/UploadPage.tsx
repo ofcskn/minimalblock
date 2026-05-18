@@ -191,9 +191,19 @@ export function UploadPage({ user }: UploadPageProps) {
                 <p className="mt-2 text-sm text-gray-500">
                   {mode === '3d'
                     ? 'Add product photos and a description. The AI quality engine will score the output and block anything not ready for buyers.'
-                    : 'Add a GLB model file and product description. The AI engine will validate it before enabling publish.'}
+                    : 'Upload a GLB file you prepared yourself — use this when AI generation fails or produces an unusable model. It still requires merchant review before publishing.'}
                 </p>
                 <div className="mt-4 flex flex-col gap-2 text-xs text-gray-400">
+                  {mode === 'glb' && (
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-left text-amber-700">
+                      <p className="font-semibold">When to use 3D Model Fallback</p>
+                      <ul className="mt-1 space-y-0.5">
+                        <li>→ AI generation failed or produced bad geometry</li>
+                        <li>→ You already have a vendor-supplied GLB file</li>
+                        <li>→ Demo or prototype model that will be replaced later</li>
+                      </ul>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
                     <span className="font-bold text-emerald-500">✓</span>
                     <span>Passed assets get approved and can be listed</span>
@@ -437,7 +447,7 @@ export function UploadPage({ user }: UploadPageProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
                 </svg>
               )}
-              Add photos
+              {mode === '3d' ? 'Add photos' : 'Add GLB file'}
             </button>
           </div>
         </div>
@@ -457,7 +467,7 @@ export function UploadPage({ user }: UploadPageProps) {
                 onClick={() => setMode('glb')}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${mode === 'glb' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                GLB
+                3D Fallback
               </button>
             </div>
             <span className="text-xs text-gray-400">AI QA · Gemini-powered</span>

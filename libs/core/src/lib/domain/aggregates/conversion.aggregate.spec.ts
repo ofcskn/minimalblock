@@ -177,6 +177,41 @@ describe('Conversion aggregate', () => {
     });
   });
 
+  describe('modelSource', () => {
+    it('defaults to ai-generated on Conversion.create', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset);
+      expect(c.modelSource).toBe('ai-generated');
+    });
+
+    it('createManual sets modelSource to manual-fallback', () => {
+      const c = Conversion.createManual('id-m', 'prod-1', 'user-1', sourceAsset, outputAsset);
+      expect(c.modelSource).toBe('manual-fallback');
+    });
+
+    it('createManual starts in awaiting_approval so merchant review is required', () => {
+      const c = Conversion.createManual('id-m', 'prod-1', 'user-1', sourceAsset, outputAsset);
+      expect(c.status.isAwaitingApproval()).toBe(true);
+    });
+
+    it('createManual does not auto-approve — approve must be called explicitly', () => {
+      const c = Conversion.createManual('id-m', 'prod-1', 'user-1', sourceAsset, outputAsset);
+      expect(c.status.isApproved()).toBe(false);
+    });
+
+    it('modelSource is preserved across state transitions', () => {
+      const c = Conversion.createManual('id-m', 'prod-1', 'user-1', sourceAsset, outputAsset)
+        .approve('user-1');
+      expect(c.modelSource).toBe('manual-fallback');
+    });
+
+    it('ai-generated modelSource is preserved across transitions', () => {
+      const c = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset)
+        .markProcessing()
+        .markCompleted(outputAsset);
+      expect(c.modelSource).toBe('ai-generated');
+    });
+  });
+
   describe('immutability', () => {
     it('returns a new instance on each state transition', () => {
       const pending = Conversion.create('id-1', 'prod-1', 'user-1', sourceAsset);

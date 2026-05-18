@@ -26,6 +26,9 @@ export type { AiDiagnosisPanelProps } from './lib/components/AiDiagnosisPanel.js
 export { SourceImageReadinessCard } from './lib/components/SourceImageReadinessCard.js';
 export type { SourceImageReadinessCardProps } from './lib/components/SourceImageReadinessCard.js';
 
+export { ModelInfoCard } from './lib/components/ModelInfoCard.js';
+export type { ModelInfoCardProps } from './lib/components/ModelInfoCard.js';
+
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';
@@ -116,7 +119,7 @@ export {
   ModelViewer,
   ModelViewerPlaceholder,
 } from './lib/3d-viewer/ModelViewer.js';
-export type { ModelViewerProps } from './lib/3d-viewer/ModelViewer.js';
+export type { ModelViewerProps, ModelViewerHandle } from './lib/3d-viewer/ModelViewer.js';
 
 // QR Code
 export { QrCode } from './lib/components/QrCode.js';
