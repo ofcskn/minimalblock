@@ -34,6 +34,17 @@ export interface ReturnRiskFactor {
   fix: string;
 }
 
+export type AiConversionResult = 'pass' | 'warning' | 'fail';
+
+export interface AiDiagnosisAttempt {
+  timestamp: string;
+  version: string;
+  readinessScore: number;
+  visualMatchScore: number;
+  commerceReadinessScore: number;
+  finalQualityScore: number;
+}
+
 export interface ProductAiAnalysis {
   categorySuggestion?: ProductCategory;
   materials: string[];
@@ -45,6 +56,18 @@ export interface ProductAiAnalysis {
   merchantRecommendations: string[];
   readinessScore?: number;
   lastUpdatedAt?: string;
+  // Phase 3 — AI Diagnosis Panel
+  visualMatchScore?: number;
+  commerceReadinessScore?: number;
+  finalQualityScore?: number;
+  detectedCategory?: ProductCategory;
+  expectedCategory?: ProductCategory;
+  conversionResult?: AiConversionResult;
+  blockingReasons?: string[];
+  missingParts?: string[];
+  sellerExplanation?: string;
+  analysisVersion?: string;
+  analysisHistory?: AiDiagnosisAttempt[];
 }
 
 export interface ProductProps {

@@ -20,6 +20,9 @@ export type { StatusBadgeProps } from './lib/components/StatusBadge.js';
 export { WorkflowStatusBadge } from './lib/components/WorkflowStatusBadge.js';
 export type { WorkflowStatusBadgeProps } from './lib/components/WorkflowStatusBadge.js';
 
+export { AiDiagnosisPanel } from './lib/components/AiDiagnosisPanel.js';
+export type { AiDiagnosisPanelProps } from './lib/components/AiDiagnosisPanel.js';
+
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';

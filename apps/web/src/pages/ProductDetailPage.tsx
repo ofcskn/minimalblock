@@ -15,7 +15,7 @@ import {
   type Product,
   type ProductCategory,
 } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -112,6 +112,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
   const [approvingProduct, setApprovingProduct] = useState(false);
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
+  const [diagnosisError, setDiagnosisError] = useState<string | null>(null);
   const trendyolPublish = useTrendyolPublish(apiClient);
 
   const lastRotateEvent = useRef(0);
@@ -271,6 +273,10 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   async function runAiAction(action: 'analyze' | 'hotspots' | 'description' | 'risk' | 'quality') {
     if (!product) return;
     setBusyAction(action);
+    if (action === 'analyze') {
+      setDiagnosisLoading(true);
+      setDiagnosisError(null);
+    }
     try {
       if (action === 'analyze') await apiClient.analyzeProduct(product.id);
       if (action === 'hotspots') await apiClient.generateHotspots(product.id);
@@ -283,9 +289,15 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         setHotspots(refreshed.hotspots);
       }
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'AI action failed');
+      const msg = actionError instanceof Error ? actionError.message : 'AI action failed';
+      if (action === 'analyze') {
+        setDiagnosisError(msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusyAction(null);
+      if (action === 'analyze') setDiagnosisLoading(false);
     }
   }
 
@@ -868,72 +880,13 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
         </Card>
 
         <div className="space-y-6">
-          <Card>
-            <h2 className="text-sm font-semibold text-gray-900">AI analysis</h2>
-            {product.aiAnalysis ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">Confidence</p>
-                    <p className="text-lg font-semibold text-gray-900">{Math.round(product.aiAnalysis.confidenceScore * 100)}%</p>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">Readiness score</p>
-                    <p className="text-lg font-semibold text-gray-900">{product.aiAnalysis.readinessScore ?? '—'}</p>
-                  </div>
-                </div>
-
-                {product.aiAnalysis.materials.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Materials</p>
-                    <div className="flex flex-wrap gap-2">
-                      {product.aiAnalysis.materials.map((material) => (
-                        <span key={material} className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700">{material}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {product.aiAnalysis.missingVisuals.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Missing visuals</p>
-                    <ul className="space-y-2">
-                      {product.aiAnalysis.missingVisuals.map((item) => (
-                        <li key={item} className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {product.aiAnalysis.returnRiskFactors.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Return-risk factors</p>
-                    <ul className="space-y-2">
-                      {product.aiAnalysis.returnRiskFactors.map((factor) => (
-                        <li key={factor.risk} className="rounded-lg bg-rose-50 p-3">
-                          <p className="text-xs font-medium text-rose-900">{factor.risk}</p>
-                          <p className="mt-1 text-xs text-rose-700">{factor.fix}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {product.aiAnalysis.qualityRecommendations.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Quality recommendations</p>
-                    <ul className="space-y-2">
-                      {product.aiAnalysis.qualityRecommendations.map((item) => (
-                        <li key={item} className="rounded-lg bg-slate-50 p-3 text-xs text-slate-700">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-400">Run product analysis to generate merchant guidance.</p>
-            )}
-          </Card>
+          <AiDiagnosisPanel
+            analysis={product.aiAnalysis}
+            isLoading={diagnosisLoading}
+            error={diagnosisError}
+            hasConversion={!!conversion.outputAsset}
+            onRunAnalysis={() => runAiAction('analyze')}
+          />
 
           <Card>
             <div className="flex items-center justify-between">
