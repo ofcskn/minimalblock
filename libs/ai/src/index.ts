@@ -40,5 +40,17 @@ export type { Convert2DTo3DResponse, ImageAnalysisResponse } from './lib/types/a
 export type { ReturnRiskItem } from './lib/gemini/gemini-risk-analyzer.js';
 export type { ReturnRiskInput } from './lib/prompts/return-risk-analysis.prompt.js';
 
+// v2 pipeline — scene graph types
+export type { SceneGraph, ScenePart, ScenePartMaterial, GeometryFamily, PrimitiveShape } from './lib/types/scene-graph.types.js';
+export type { ProductUnderstanding, GeometryIntelligence, ScaleBounds, PbrMaterialMap } from './lib/types/product-understanding.types.js';
+export type { ValidationReport, ValidationIssue } from './lib/types/validation.types.js';
+
+// v2 pipeline — feedback service
+export { GenerationFeedbackService } from './lib/feedback/generation-feedback.service.js';
+
+// v2 pipeline — validators (exported for server use)
+export { SceneGraphValidator, autoRepairSceneGraph } from './lib/validation/scene-graph-validator.js';
+export { GlbValidator } from './lib/validation/glb-validator.js';
+
 // Mock provider (replaceable — real Gemini implements the same interface)
 export { getMockAnalysis } from './lib/mock/mock-analyzer.js';
