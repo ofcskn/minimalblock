@@ -62,6 +62,29 @@ function toGalleryModel(
   };
 }
 
+function toImportedGalleryModel(product: Product): GalleryModel {
+  const selectedPreview = product.importData?.imageCandidates.find((candidate) => candidate.selected && candidate.url)?.url
+    ?? product.importData?.imageCandidates.find((candidate) => candidate.url)?.url;
+  const syntheticStatus =
+    product.workflowStatus === 'approved' || product.workflowStatus === 'published'
+      ? 'approved'
+      : product.workflowStatus === 'scrape_failed' || product.workflowStatus === 'failed_qa'
+        ? 'failed'
+        : 'processing';
+
+  return {
+    id: product.id,
+    productId: product.id,
+    name: product.name,
+    category: product.category,
+    status: syntheticStatus,
+    previewUrl: selectedPreview,
+    hotspotCount: product.hotspots.length,
+    errorMessage: product.importData?.failureReasons.join(', ') || undefined,
+    qaScore: product.aiAnalysis?.readinessScore,
+  };
+}
+
 export function GalleryPage({ user }: GalleryPageProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -87,7 +110,14 @@ export function GalleryPage({ user }: GalleryPageProps) {
   }, [productRepo, user.id, conversions]);
 
   const galleryModels = useMemo(
-    () => conversions.map((conversion) => toGalleryModel(conversion, products.get(conversion.productId))),
+    () => {
+      const fromConversions = conversions.map((conversion) => toGalleryModel(conversion, products.get(conversion.productId)));
+      const convertedProductIds = new Set(conversions.map((conversion) => conversion.productId));
+      const importOnlyProducts = Array.from(products.values())
+        .filter((product) => !convertedProductIds.has(product.id) && product.inputMethod === 'url_import')
+        .map((product) => toImportedGalleryModel(product));
+      return [...importOnlyProducts, ...fromConversions];
+    },
     [conversions, products],
   );
 

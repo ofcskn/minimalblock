@@ -23,11 +23,31 @@ function toApiAsset(asset: MediaAsset): ApiMediaAssetInput {
 
 type Mode = '3d' | 'glb';
 
+const SUPPORTED_IMPORT_DOMAINS = new Set(['amazon.com', 'etsy.com', 'ikea.com', 'trendyol.com', 'minimalblock.demo']);
+
+function parseUrlSupport(value: string): { isValid: boolean; supportLabel?: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return { isValid: false };
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    const domain = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    return {
+      isValid: true,
+      supportLabel: SUPPORTED_IMPORT_DOMAINS.has(domain) ? 'Supported domain' : 'Best-effort extraction',
+    };
+  } catch {
+    return { isValid: false };
+  }
+}
+
 export function UploadPage({ user }: UploadPageProps) {
   const navigate = useNavigate();
   const { imageUploader, apiClient } = useApp();
 
   const [mode, setMode] = useState<Mode>('3d');
+  const [productUrl, setProductUrl] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [importingUrl, setImportingUrl] = useState(false);
   const [productDetails, setProductDetails] = useState('');
   const [sourceAssets, setSourceAssets] = useState<MediaAsset[]>([]);
   const [glbAsset, setGlbAsset] = useState<MediaAsset | null>(null);
@@ -39,8 +59,10 @@ export function UploadPage({ user }: UploadPageProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const glbInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const urlSupport = parseUrlSupport(productUrl);
 
   const canStart = (mode === '3d' ? sourceAssets.length > 0 : !!glbAsset) && productDetails.trim().length > 0 && !submitting;
+  const canImportUrl = urlSupport.isValid && !importingUrl;
   const isPolling = conversion?.status === 'pending' || conversion?.status === 'processing';
   const isProcessing = submitting || isPolling;
   const hasOutput = (conversion?.status === 'completed' || conversion?.status === 'approved') && !!conversion.outputAsset;
@@ -65,12 +87,31 @@ export function UploadPage({ user }: UploadPageProps) {
   );
 
   function newChat() {
+    setProductUrl('');
+    setUrlError(null);
     setProductDetails('');
     setSourceAssets([]);
     setGlbAsset(null);
     setConversion(null);
     setSubmitError(null);
     textareaRef.current?.focus();
+  }
+
+  async function startUrlImport() {
+    if (!urlSupport.isValid) {
+      setUrlError(productUrl.trim().length === 0 ? 'Paste a product page URL to continue.' : 'Enter a valid product page URL.');
+      return;
+    }
+    setImportingUrl(true);
+    setUrlError(null);
+    try {
+      const response = await apiClient.importProductUrl({ url: productUrl.trim() });
+      navigate(`/product/${response.product.productId}`);
+    } catch (error) {
+      setUrlError(error instanceof Error ? error.message : 'Import failed. Try again or use manual fallback.');
+    } finally {
+      setImportingUrl(false);
+    }
   }
 
   async function handleImageFiles(files: File[]) {
@@ -150,7 +191,7 @@ export function UploadPage({ user }: UploadPageProps) {
           <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
-          Upload for QA Review
+          Create Product
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -160,7 +201,7 @@ export function UploadPage({ user }: UploadPageProps) {
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            New upload
+            New draft
           </button>
           <button
             onClick={() => navigate('/')}
@@ -181,36 +222,86 @@ export function UploadPage({ user }: UploadPageProps) {
           {/* Empty state */}
           {!conversion && currentFile.length === 0 && !isProcessing && (
             <div className="flex flex-1 items-center justify-center p-8">
-              <div className="max-w-sm text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50">
-                  <svg className="h-8 w-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                  </svg>
-                </div>
-                <p className="text-base font-semibold text-gray-900">Safe-to-publish product experience</p>
-                <p className="mt-2 text-sm text-gray-500">
-                  {mode === '3d'
-                    ? 'Add product photos and a description. The AI quality engine will score the output and block anything not ready for buyers.'
-                    : 'Upload a GLB file you prepared yourself — use this when AI generation fails or produces an unusable model. It still requires merchant review before publishing.'}
-                </p>
-                <div className="mt-4 flex flex-col gap-2 text-xs text-gray-400">
-                  {mode === 'glb' && (
-                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-left text-amber-700">
-                      <p className="font-semibold">When to use 3D Model Fallback</p>
-                      <ul className="mt-1 space-y-0.5">
-                        <li>→ AI generation failed or produced bad geometry</li>
-                        <li>→ You already have a vendor-supplied GLB file</li>
-                        <li>→ Demo or prototype model that will be replaced later</li>
-                      </ul>
+              <div className="w-full max-w-3xl space-y-6">
+                <div className="rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6 shadow-sm">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="max-w-xl">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-500">Recommended path</p>
+                      <h2 className="mt-2 text-2xl font-semibold text-gray-900">Import from Product URL</h2>
+                      <p className="mt-2 text-sm leading-6 text-gray-600">
+                        Paste a product page URL and Minimal Block will extract product text, import candidate images, autofill missing fields, and route the product into review.
+                      </p>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
-                    <span className="font-bold text-emerald-500">✓</span>
-                    <span>Passed assets get approved and can be listed</span>
+                    <div className="rounded-2xl bg-white/80 px-4 py-3 text-xs text-gray-600 shadow-sm ring-1 ring-indigo-100">
+                      Seller review is still required before publish or export.
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
-                    <span className="font-bold text-red-500">✕</span>
-                    <span>Failed assets are blocked — never shown to buyers</span>
+
+                  <div className="mt-5 flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <input
+                        value={productUrl}
+                        onChange={(event) => {
+                          setProductUrl(event.target.value);
+                          if (urlError) setUrlError(null);
+                        }}
+                        placeholder="Paste product page URL"
+                        className="flex-1 rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                      />
+                      <button
+                        onClick={startUrlImport}
+                        disabled={!canImportUrl}
+                        className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-indigo-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {importingUrl ? 'Importing…' : 'Import URL'}
+                      </button>
+                    </div>
+                    {productUrl.trim().length > 0 && (
+                      <div className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-medium ${urlSupport.supportLabel === 'Supported domain' ? 'bg-emerald-100 text-emerald-700' : urlSupport.isValid ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'}`}>
+                        {urlSupport.isValid ? urlSupport.supportLabel : 'Invalid URL format'}
+                      </div>
+                    )}
+                    {urlError && (
+                      <p className="text-sm text-red-600">{urlError}</p>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      Mock demo URLs are supported for hackathon reliability. Unknown domains still run in best-effort mode.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('3d'); textareaRef.current?.focus(); }}
+                    className="rounded-2xl border border-gray-200 bg-white p-5 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50/30"
+                  >
+                    <p className="text-sm font-semibold text-gray-900">Manual Upload Fallback</p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Add product photos and description manually if scraping fails or the page content is too weak.
+                    </p>
+                    <p className="mt-3 text-xs font-medium text-indigo-600">Photos + merchant-entered details</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('glb'); textareaRef.current?.focus(); }}
+                    className="rounded-2xl border border-gray-200 bg-white p-5 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50/30"
+                  >
+                    <p className="text-sm font-semibold text-gray-900">Manual GLB Fallback</p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Use this when you already have a vendor-supplied GLB or AI-generated 3D is not part of the current path.
+                    </p>
+                    <p className="mt-3 text-xs font-medium text-indigo-600">Bring your own model</p>
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-white px-4 py-3 text-sm text-gray-600 shadow-sm ring-1 ring-gray-100">
+                    1. Import product content from URL
+                  </div>
+                  <div className="rounded-2xl bg-white px-4 py-3 text-sm text-gray-600 shadow-sm ring-1 ring-gray-100">
+                    2. Review extracted text and images
+                  </div>
+                  <div className="rounded-2xl bg-white px-4 py-3 text-sm text-gray-600 shadow-sm ring-1 ring-gray-100">
+                    3. Continue into readiness, diagnosis, and merchant review
                   </div>
                 </div>
               </div>
@@ -461,13 +552,13 @@ export function UploadPage({ user }: UploadPageProps) {
                 onClick={() => setMode('3d')}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${mode === '3d' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                3D Model
+                Manual Upload
               </button>
               <button
                 onClick={() => setMode('glb')}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${mode === 'glb' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               >
-                3D Fallback
+                Manual GLB
               </button>
             </div>
             <span className="text-xs text-gray-400">AI QA · Gemini-powered</span>

@@ -5,11 +5,15 @@ import type {
   CreateConversionResponse,
   GenerateDescriptionResponse,
   GenerateHotspotsResponse,
+  ImportProductUrlRequest,
+  ImportProductUrlResponse,
   QualityCheckResponse,
   RejectConversionRequest,
+  RetryImportedProductResponse,
   ReturnRiskResponse,
+  SaveImportedReviewRequest,
+  SaveImportedReviewResponse,
 } from '@minimalblock/core';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface TrendyolProductDraft {
   title: string;
@@ -57,7 +61,11 @@ export interface BatchResult {
 export class MerchantApiClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly supabase: SupabaseClient,
+    private readonly supabase: {
+      auth: {
+        getSession(): Promise<{ data: { session: { access_token?: string } | null } }>;
+      };
+    },
   ) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -87,6 +95,34 @@ export class MerchantApiClient {
     return this.request<CreateConversionResponse>('/api/conversions', {
       method: 'POST',
       body: JSON.stringify(input),
+    });
+  }
+
+  tryImportedProduct3d(productId: string): Promise<CreateConversionResponse> {
+    return this.request<CreateConversionResponse>(`/api/products/${productId}/try-3d`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  importProductUrl(input: ImportProductUrlRequest): Promise<ImportProductUrlResponse> {
+    return this.request<ImportProductUrlResponse>('/api/products/import-url', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  saveImportedReview(productId: string, input: SaveImportedReviewRequest): Promise<SaveImportedReviewResponse> {
+    return this.request<SaveImportedReviewResponse>(`/api/products/${productId}/import/review`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  retryImportedProduct(productId: string): Promise<RetryImportedProductResponse> {
+    return this.request<RetryImportedProductResponse>(`/api/products/${productId}/import/retry`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   }
 
