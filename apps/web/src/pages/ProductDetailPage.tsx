@@ -9,13 +9,14 @@ import {
   PRODUCT_CATEGORIES,
   ProductWorkflowStatus,
   QualityReport,
+  SourceImageReadiness,
   generateId,
   type ConversionSnapshot,
   type Hotspot,
   type Product,
   type ProductCategory,
 } from '@minimalblock/core';
-import { ModelViewer, ModelViewerPlaceholder, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -392,6 +393,11 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   // WorkflowStatus is the authoritative gate for all publish/export/approval decisions.
   // ConversionStatus only controls the 3D pipeline display (pending → processing → done).
   const workflowStatus = ProductWorkflowStatus.from(product.workflowStatus);
+
+  // Phase 4: prefer AI-enriched entries from product analysis; fall back to heuristic derivation.
+  const sourceImageReadiness = product.aiAnalysis?.sourceImageEntries
+    ? SourceImageReadiness.fromEntries(product.aiAnalysis.sourceImageEntries)
+    : SourceImageReadiness.fromMediaAssets(conversion.sourceAssets);
   const isBlocked = workflowStatus.isBlocked();          // failed_qa — hard block
   const isNeedsFix = workflowStatus.value === 'needs_fix';
   const isReadyForReview = workflowStatus.value === 'ready_for_review';
@@ -886,6 +892,12 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             error={diagnosisError}
             hasConversion={!!conversion.outputAsset}
             onRunAnalysis={() => runAiAction('analyze')}
+          />
+
+          <SourceImageReadinessCard
+            readiness={sourceImageReadiness}
+            onUploadMissingViews={() => navigate('/upload')}
+            onContinueAnyway={() => navigate('/upload')}
           />
 
           <Card>

@@ -1,5 +1,22 @@
 import { generateId } from '@minimalblock/core';
-import type { ProductProps } from '@minimalblock/core';
+import type { ProductProps, SourceImageEntry } from '@minimalblock/core';
+
+const DEMO_ASSET_BASE = 'https://images.unsplash.com/photo';
+
+function demoEntry(
+  storageKey: string,
+  viewLabel: SourceImageEntry['viewLabel'],
+  warnings: SourceImageEntry['warnings'] = [],
+  sizeBytes = 220_000,
+): SourceImageEntry {
+  return {
+    storageKey,
+    url: `${DEMO_ASSET_BASE}-placeholder/${storageKey}`,
+    sizeBytes,
+    viewLabel,
+    warnings,
+  };
+}
 
 export const DEMO_PRODUCT_FAILED: ProductProps = {
   id: generateId(),
@@ -40,6 +57,10 @@ export const DEMO_PRODUCT_FAILED: ProductProps = {
       'Compare battery life against competing models in the copy',
     ],
     lastUpdatedAt: '2026-05-18T08:00:00.000Z',
+    sourceImageEntries: [
+      demoEntry('demo/headphones-image001.jpg', 'unknown', ['angle_unclear'], 28_000),
+      demoEntry('demo/headphones-image002.jpg', 'unknown', ['low_resolution', 'likely_duplicate'], 31_000),
+    ],
   },
   createdAt: new Date('2026-05-18T07:00:00.000Z'),
   updatedAt: new Date('2026-05-18T08:00:00.000Z'),
@@ -79,6 +100,12 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
       'Cross-sell with the matching wallet and cardholders',
     ],
     lastUpdatedAt: '2026-05-18T09:30:00.000Z',
+    sourceImageEntries: [
+      demoEntry('demo/tote-front.jpg', 'front', []),
+      demoEntry('demo/tote-back.jpg', 'back', []),
+      demoEntry('demo/tote-detail.jpg', 'detail', []),
+      demoEntry('demo/tote-scale.jpg', 'scale', []),
+    ],
   },
   createdAt: new Date('2026-05-18T09:00:00.000Z'),
   updatedAt: new Date('2026-05-18T09:30:00.000Z'),
@@ -122,6 +149,11 @@ export const DEMO_PRODUCT_WARNING: ProductProps = {
       'Add assembly time estimate to reduce support inquiries',
     ],
     lastUpdatedAt: '2026-05-18T10:15:00.000Z',
+    sourceImageEntries: [
+      demoEntry('demo/lamp-front.jpg', 'front', ['background_inconsistent']),
+      demoEntry('demo/lamp-side.jpg', 'unknown', ['angle_unclear']),
+      demoEntry('demo/lamp-top.jpg', 'top', ['low_resolution'], 38_000),
+    ],
   },
   createdAt: new Date('2026-05-18T10:00:00.000Z'),
   updatedAt: new Date('2026-05-18T10:15:00.000Z'),

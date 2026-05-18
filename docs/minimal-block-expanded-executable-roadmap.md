@@ -968,9 +968,19 @@ Executable steps:
 
 - AI panel supports the product story clearly.
 
-# Phase 4 — Source Image Readiness
+# Phase 4 — Source Image Readiness ✓ COMPLETE (2026-05-18)
 ## Objective
 Help sellers understand whether their uploaded product images are actually useful.
+
+## Implementation Summary
+- Created `SourceImageReadiness` value object in `libs/core` with: `fromMediaAssets()` (filename-heuristic derivation) and `fromEntries()` (pre-computed/AI-enriched). Computes `score` (0–100), `missingViews`, `coveredViews`, `hasEnoughUniqueViews`, `weakImages`, `hasDuplicates`, `hasLowResImages`
+- Added `ImageViewLabel` ('front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'detail' | 'scale' | 'unknown') and `ImageQualityWarning` ('low_resolution' | 'likely_duplicate' | 'likely_cropped' | 'background_inconsistent' | 'angle_unclear') types exported from core
+- Added `sourceImageEntries?: SourceImageEntry[]` to `ProductAiAnalysis` so AI-enriched or demo data can carry per-image quality metadata
+- Created `SourceImageReadinessCard` in `libs/ui`: image grid with per-image warning badges, 8-view coverage checklist (Required label for front/back), readiness score bar, quality tip ("more ≠ better"), and action buttons: "Upload missing views", "Remove weak images", "Continue anyway (internal review)"
+- Demo products enriched: failed product has 2 unlabelled/low-res images (score ≈ 27), warning product has front + 2 weak images (score ≈ 57), success product has all 4 key views clean (score = 100)
+- `ProductDetailPage` wired: derives readiness from `product.aiAnalysis.sourceImageEntries` (preferred) or falls back to `SourceImageReadiness.fromMediaAssets(conversion.sourceAssets)`; card renders in the right-column sidebar below `AiDiagnosisPanel`
+- Score algorithm: –30 missing front, –20 missing back, –10 missing detail; per-warning deductions: –10 duplicate, –8 low-res, –5 cropped/background/angle-unclear; clamped [0, 100]
+- 27 new unit tests (core VO + UI component), all passing
 
 ## TODO
 D.1. Count uploaded images

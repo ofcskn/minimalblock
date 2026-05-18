@@ -1,5 +1,6 @@
 import { generateId } from '../../utils/id-generator.js';
 import { ProductWorkflowStatus, type ProductWorkflowStatusValue } from '../value-objects/product-workflow-status.vo.js';
+import type { SourceImageEntry } from '../value-objects/source-image-readiness.vo.js';
 
 export type ProductCategory = 'furniture' | 'home-decor' | 'bags' | 'accessories' | 'electronics' | 'other';
 export type SuggestedHotspotType = 'material' | 'dimension' | 'feature' | 'warning' | 'assembly';
@@ -68,6 +69,8 @@ export interface ProductAiAnalysis {
   sellerExplanation?: string;
   analysisVersion?: string;
   analysisHistory?: AiDiagnosisAttempt[];
+  // Phase 4 — Source Image Readiness: pre-computed entries for demo / AI-enriched data
+  sourceImageEntries?: SourceImageEntry[];
 }
 
 export interface ProductProps {
