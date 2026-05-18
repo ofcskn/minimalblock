@@ -25,8 +25,16 @@ export const DEMO_PRODUCT_FAILED: ProductProps = {
   category: 'electronics',
   ownerId: 'demo-seller',
   slug: 'wireless-headphones-demo-failed',
-  hotspots: [],
-  hotspotsSuggested: [],
+  // Phase 6 — invalid hotspot demo path: empty label, test label, missing type/description
+  hotspots: [
+    { id: generateId(), label: '', type: 'feature', approved: false },
+    { id: generateId(), label: 'test', description: 'test', type: undefined, position: '0.1 0.2 0.3', normal: '0 1 0', approved: false },
+    { id: generateId(), label: 'hotspot', description: 'click here', type: undefined, approved: false },
+  ],
+  hotspotsSuggested: [
+    { id: generateId(), title: 'ANC Microphone Array', description: 'Four-microphone setup actively cancels ambient noise for immersive listening.', type: 'feature', status: 'pending' },
+    { id: generateId(), title: 'USB-C Charging Port', description: 'Universal USB-C port supports 30-minute fast-charge for 10 hours of playback.', type: 'feature', status: 'pending' },
+  ],
   workflowStatus: 'failed_qa',
   aiAnalysis: {
     categorySuggestion: 'electronics',
@@ -73,8 +81,49 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
   category: 'bags',
   ownerId: 'demo-seller',
   slug: 'leather-tote-bag-demo-approved',
-  hotspots: [],
-  hotspotsSuggested: [],
+  // Phase 6 — valid hotspot demo path: all hotspots have labels, descriptions, types, positions, and are approved
+  hotspots: [
+    {
+      id: generateId(),
+      label: 'Full-Grain Italian Leather',
+      description: 'Sourced from Tuscan tanneries — develops a rich patina with age and daily use.',
+      type: 'material',
+      position: '0.0500 0.1200 0.2300',
+      normal: '0 0 1',
+      approved: true,
+    },
+    {
+      id: generateId(),
+      label: 'Solid Brass Hardware',
+      description: 'Solid brass D-rings and clasps resist tarnish and outlast the bag itself.',
+      type: 'material',
+      position: '-0.0300 0.0800 0.2800',
+      normal: '0 0 1',
+      approved: true,
+    },
+    {
+      id: generateId(),
+      label: 'Magnetic Closure',
+      description: 'Strong neodymium magnet keeps the bag securely shut without slowing you down.',
+      type: 'feature',
+      position: '0.0000 0.2100 0.1500',
+      normal: '0 1 0',
+      approved: true,
+    },
+    {
+      id: generateId(),
+      label: 'Interior Width — 34 cm',
+      description: 'Wide enough for a 13″ laptop, A4 documents, and daily essentials side by side.',
+      type: 'dimension',
+      position: '0.0200 0.0500 0.1800',
+      normal: '1 0 0',
+      approved: true,
+    },
+  ],
+  hotspotsSuggested: [
+    { id: generateId(), title: 'Cotton Canvas Lining', description: 'Woven cotton lining protects contents and resists tearing under heavy loads.', type: 'material', status: 'accepted' },
+    { id: generateId(), title: 'Open Slip Pocket', description: 'External slip pocket fits a phone or transit card for quick access.', type: 'feature', status: 'accepted' },
+  ],
   workflowStatus: 'approved',
   aiAnalysis: {
     categorySuggestion: 'bags',
@@ -118,8 +167,30 @@ export const DEMO_PRODUCT_MANUAL_FALLBACK: ProductProps = {
   category: 'home-decor',
   ownerId: 'demo-seller',
   slug: 'ceramic-vase-demo-manual-fallback',
-  hotspots: [],
-  hotspotsSuggested: [],
+  // Phase 6 — pending-approval demo path: hotspots placed but not yet approved by seller
+  hotspots: [
+    {
+      id: generateId(),
+      label: 'Matte Glaze Finish',
+      description: 'Hand-applied matte glaze fired at 1260 °C — smooth to the touch and dishwasher-safe.',
+      type: 'material',
+      position: '0.0000 0.1500 0.1500',
+      normal: '0 0 1',
+      approved: false,
+    },
+    {
+      id: generateId(),
+      label: 'Watertight Interior',
+      description: 'Non-porous interior suitable for fresh flowers with water or dried arrangements.',
+      type: 'feature',
+      position: '0.0000 0.2200 0.0500',
+      normal: '0 1 0',
+      approved: false,
+    },
+  ],
+  hotspotsSuggested: [
+    { id: generateId(), title: 'Artisan Maker Mark', description: 'Hand-incised maker mark on the base identifies the individual potter who threw this piece.', type: 'feature', status: 'pending' },
+  ],
   workflowStatus: 'ready_for_review',
   aiAnalysis: {
     categorySuggestion: 'home-decor',
@@ -165,8 +236,40 @@ export const DEMO_PRODUCT_WARNING: ProductProps = {
   category: 'home-decor',
   ownerId: 'demo-seller',
   slug: 'modern-floor-lamp-demo-needs-fix',
-  hotspots: [],
-  hotspotsSuggested: [],
+  // Phase 6 — mixed quality demo path: one valid hotspot, one with warnings (missing type/description)
+  hotspots: [
+    {
+      id: generateId(),
+      label: 'Natural Marble Base',
+      description: 'Solid Carrara marble base weighs 4 kg — keeps the 180 cm arc stable without wall anchoring.',
+      type: 'material',
+      position: '0.0000 -0.0500 0.1200',
+      normal: '0 -1 0',
+      approved: true,
+    },
+    {
+      id: generateId(),
+      label: 'Adjustable Arc Head',
+      description: undefined,
+      type: undefined,
+      position: '0.1000 0.3500 0.0800',
+      normal: '0 0 1',
+      approved: false,
+    },
+    {
+      id: generateId(),
+      label: 'E27 Bulb Socket',
+      description: 'Compatible with standard E27 bulbs up to 60 W, including Edison-style filament bulbs.',
+      type: 'assembly',
+      position: '0.0800 0.4000 0.0500',
+      normal: '0 1 0',
+      approved: false,
+    },
+  ],
+  hotspotsSuggested: [
+    { id: generateId(), title: 'Fabric Drum Shade', description: 'Linen drum shade diffuses warm light and reduces glare for reading.', type: 'feature', status: 'pending' },
+    { id: generateId(), title: 'Touch-Dimmer Switch', description: 'Inline touch dimmer on the cord provides three brightness levels.', type: 'feature', status: 'rejected' },
+  ],
   workflowStatus: 'needs_fix',
   aiAnalysis: {
     categorySuggestion: 'home-decor',
