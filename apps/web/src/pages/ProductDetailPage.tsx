@@ -37,12 +37,12 @@ function hydrateConversion(snapshot: ConversionSnapshot): Conversion {
   }));
   const outputAsset = snapshot.outputAsset
     ? new MediaAsset({
-        url: snapshot.outputAsset.url,
-        storageKey: snapshot.outputAsset.storageKey,
-        mimeType: snapshot.outputAsset.mimeType,
-        kind: 'generated-model',
-        sizeBytes: snapshot.outputAsset.sizeBytes,
-      })
+      url: snapshot.outputAsset.url,
+      storageKey: snapshot.outputAsset.storageKey,
+      mimeType: snapshot.outputAsset.mimeType,
+      kind: 'generated-model',
+      sizeBytes: snapshot.outputAsset.sizeBytes,
+    })
     : undefined;
 
   return new Conversion({
@@ -565,7 +565,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const publicUrl = canPublish ? `${window.location.origin}${product.publicUrl}` : null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto space-y-6">
       {error && (
         <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
