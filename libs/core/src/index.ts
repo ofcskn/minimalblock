@@ -21,6 +21,7 @@ export * from './lib/adapters/ports/model-generator.port.js';
 export * from './lib/adapters/ports/conversion-repository.port.js';
 export * from './lib/adapters/ports/generation-job-repository.port.js';
 export * from './lib/adapters/ports/product-repository.port.js';
+export * from './lib/adapters/ports/page-scraper.port.js';
 
 // Utils
 export * from './lib/utils/id-generator.js';
