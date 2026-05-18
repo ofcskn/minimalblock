@@ -1,0 +1,14 @@
+-- ============================================================
+-- Phase 1 — APUS (Autonomous Product Understanding System)
+-- No schema changes: all new fields live within import_data JSONB
+--
+-- New fields added to import_data:
+--   productClusters, primaryClusterId, multiProductDetected,
+--   pageRegions, imageIntelligence, inferredMaterialFinish,
+--   inferredGeometryComplexity, fieldConflicts
+--
+-- New fields added to import_data.imageCandidates[]:
+--   aiImageClass, aiRelevanceScore, aiRejected, aiRejectionReason,
+--   perceptualHash, variantKey, viewAngle
+-- ============================================================
+COMMENT ON COLUMN products.import_data IS 'APUS v1 — extended with image intelligence, multi-product clusters, material/geometry inference';
