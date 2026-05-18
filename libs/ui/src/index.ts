@@ -23,6 +23,9 @@ export type { WorkflowStatusBadgeProps } from './lib/components/WorkflowStatusBa
 export { AiDiagnosisPanel } from './lib/components/AiDiagnosisPanel.js';
 export type { AiDiagnosisPanelProps } from './lib/components/AiDiagnosisPanel.js';
 
+export { SourceImageReadinessCard } from './lib/components/SourceImageReadinessCard.js';
+export type { SourceImageReadinessCardProps } from './lib/components/SourceImageReadinessCard.js';
+
 // Layout
 export { AppShell } from './lib/layout/AppShell.js';
 export type { AppShellProps } from './lib/layout/AppShell.js';
