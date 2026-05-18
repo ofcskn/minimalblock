@@ -29,9 +29,15 @@ interface GalleryPageProps {
 const PAGE_SIZE = 12;
 
 function mapStatus(status: string): 'ready' | 'processing' | 'failed' {
-  if (status === 'completed' || status === 'approved') return 'ready';
+  if (status === 'approved') return 'ready';
   if (status === 'failed' || status === 'rejected') return 'failed';
   return 'processing';
+}
+
+function readinessLabel(status: string, t: (key: string) => string): { label: string; color: string } {
+  if (status === 'approved') return { label: t('gallery.readinessReady'), color: 'text-emerald-700 bg-emerald-50' };
+  if (status === 'failed' || status === 'rejected') return { label: t('gallery.readinessBlocked'), color: 'text-red-700 bg-red-50' };
+  return { label: t('gallery.readinessPending'), color: 'text-amber-700 bg-amber-50' };
 }
 
 function toGalleryModel(
@@ -52,6 +58,30 @@ function toGalleryModel(
     modelUrl,
     hotspotCount: product?.hotspots.length ?? 0,
     errorMessage: conversion.errorMessage,
+    qaScore: conversion.qualityReport?.score(),
+  };
+}
+
+function toImportedGalleryModel(product: Product): GalleryModel {
+  const selectedPreview = product.importData?.imageCandidates.find((candidate) => candidate.selected && candidate.url)?.url
+    ?? product.importData?.imageCandidates.find((candidate) => candidate.url)?.url;
+  const syntheticStatus =
+    product.workflowStatus === 'approved' || product.workflowStatus === 'published'
+      ? 'approved'
+      : product.workflowStatus === 'scrape_failed' || product.workflowStatus === 'failed_qa'
+        ? 'failed'
+        : 'processing';
+
+  return {
+    id: product.id,
+    productId: product.id,
+    name: product.name,
+    category: product.category,
+    status: syntheticStatus,
+    previewUrl: selectedPreview,
+    hotspotCount: product.hotspots.length,
+    errorMessage: product.importData?.failureReasons.join(', ') || undefined,
+    qaScore: product.aiAnalysis?.readinessScore,
   };
 }
 
@@ -80,7 +110,14 @@ export function GalleryPage({ user }: GalleryPageProps) {
   }, [productRepo, user.id, conversions]);
 
   const galleryModels = useMemo(
-    () => conversions.map((conversion) => toGalleryModel(conversion, products.get(conversion.productId))),
+    () => {
+      const fromConversions = conversions.map((conversion) => toGalleryModel(conversion, products.get(conversion.productId)));
+      const convertedProductIds = new Set(conversions.map((conversion) => conversion.productId));
+      const importOnlyProducts = Array.from(products.values())
+        .filter((product) => !convertedProductIds.has(product.id) && product.inputMethod === 'url_import')
+        .map((product) => toImportedGalleryModel(product));
+      return [...importOnlyProducts, ...fromConversions];
+    },
     [conversions, products],
   );
 
@@ -204,12 +241,16 @@ export function GalleryPage({ user }: GalleryPageProps) {
               }
             >
               {visibleModels.map((model) => {
-                const isReady = mapStatus(model.status) === 'ready' && !!model.modelUrl;
+                const isApproved = model.status === 'approved';
+                const isFailed = model.status === 'failed' || model.status === 'rejected';
+                const isReady = isApproved && !!model.modelUrl;
+                const readiness = readinessLabel(model.status, t);
                 return (
                   <article
                     key={model.id}
                     className={
-                      'overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-slate-300 ' +
+                      'overflow-hidden rounded-2xl border bg-white transition-colors ' +
+                      (isFailed ? 'border-red-200 hover:border-red-300' : 'border-slate-200 hover:border-slate-300 ') +
                       (viewMode === 'list' ? 'flex flex-col gap-4 p-4 md:flex-row' : '')
                     }
                   >
@@ -223,7 +264,8 @@ export function GalleryPage({ user }: GalleryPageProps) {
                     >
                       <div
                         className={
-                          'relative overflow-hidden bg-slate-100 ' +
+                          'relative overflow-hidden ' +
+                          (isFailed ? 'bg-red-50' : 'bg-slate-100') + ' ' +
                           (viewMode === 'list' ? 'h-48 rounded-2xl md:h-40 md:w-56' : 'aspect-[4/3] w-full')
                         }
                       >
@@ -239,12 +281,13 @@ export function GalleryPage({ user }: GalleryPageProps) {
                           <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-700 backdrop-blur">
                             {model.category ?? t('gallery.uncategorized')}
                           </span>
-                          {isReady && (
-                            <span className="rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white">
-                              {t('gallery.ready3d')}
-                            </span>
-                          )}
                         </div>
+
+                        {isFailed && (
+                          <div className="absolute bottom-3 left-3 right-3 rounded-lg bg-red-700/90 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur">
+                            Blocked — publish gated
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex min-w-0 flex-1 flex-col p-4 pt-4">
@@ -262,8 +305,25 @@ export function GalleryPage({ user }: GalleryPageProps) {
                           <StatusBadge status={model.status} />
                         </div>
 
+                        {/* QA Score row */}
+                        <div className="mt-3 flex items-center gap-3">
+                          {model.qaScore !== undefined && (
+                            <span className={
+                              'rounded-full px-2.5 py-0.5 text-xs font-semibold ' +
+                              (model.qaScore >= 70 ? 'bg-emerald-50 text-emerald-700' :
+                               model.qaScore >= 40 ? 'bg-amber-50 text-amber-700' :
+                               'bg-red-50 text-red-700')
+                            }>
+                              {t('gallery.qaScore', { score: model.qaScore })}
+                            </span>
+                          )}
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${readiness.color}`}>
+                            {readiness.label}
+                          </span>
+                        </div>
+
                         {model.errorMessage && (
-                          <p className="mt-3 text-sm text-red-600">{model.errorMessage}</p>
+                          <p className="mt-3 text-xs text-red-600 leading-relaxed">{model.errorMessage}</p>
                         )}
 
                         <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">

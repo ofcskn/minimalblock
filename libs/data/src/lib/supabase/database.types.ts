@@ -28,6 +28,9 @@ export type Database = {
           ai_insights: Json | null;
           hotspots_suggested: Json;
           hotspots_suggested_at: string | null;
+          workflow_status: string;
+          input_method: string;
+          import_data: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -42,6 +45,9 @@ export type Database = {
           ai_insights?: Json | null;
           hotspots_suggested?: Json;
           hotspots_suggested_at?: string | null;
+          workflow_status?: string;
+          input_method?: string;
+          import_data?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -56,6 +62,9 @@ export type Database = {
           ai_insights?: Json | null;
           hotspots_suggested?: Json;
           hotspots_suggested_at?: string | null;
+          workflow_status?: string;
+          input_method?: string;
+          import_data?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
