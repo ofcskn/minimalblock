@@ -107,7 +107,7 @@ export function GalleryPage({ user }: GalleryPageProps) {
     productRepo.findByOwnerId(user.id).then((list) => {
       setProducts(new Map(list.map((product) => [product.id, product])));
     });
-  }, [productRepo, user.id, conversions]);
+  }, [productRepo, user.id]);
 
   const galleryModels = useMemo(
     () => {

@@ -69,9 +69,10 @@ export function UploadPage({ user }: UploadPageProps) {
 
   useEffect(() => {
     if (!conversion || !isPolling) return;
+    const conversionId = conversion.id;
     const interval = window.setInterval(async () => {
       try {
-        const response = await apiClient.getConversion(conversion.id);
+        const response = await apiClient.getConversion(conversionId);
         setConversion(response.conversion);
       } catch (error) {
         setSubmitError(error instanceof Error ? error.message : 'Failed to refresh.');
@@ -79,7 +80,7 @@ export function UploadPage({ user }: UploadPageProps) {
       }
     }, 2500);
     return () => window.clearInterval(interval);
-  }, [apiClient, conversion, isPolling]);
+  }, [apiClient, conversion?.id, isPolling]);
 
   const sortedSourceAssets = useMemo(
     () => [...sourceAssets].sort((a, b) => a.storageKey.localeCompare(b.storageKey)),
