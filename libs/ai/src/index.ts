@@ -11,6 +11,9 @@ export type { VisualQaInput } from './lib/gemini/gemini-visual-qa.js';
 // APUS — AI service classes
 export { GeminiImageClassifier } from './lib/gemini/gemini-image-classifier.js';
 export type { ImageClassificationResult } from './lib/gemini/gemini-image-classifier.js';
+// APIA — Product Intelligence Agent
+export { GeminiProductIntelligenceAgent } from './lib/gemini/gemini-product-intelligence-agent.js';
+export type { ProductIntelligenceOutput, PerImageIntelligence, DatasetIntelligence } from './lib/gemini/gemini-product-intelligence-agent.js';
 export { GeminiProductClusterAnalyzer } from './lib/gemini/gemini-product-cluster-analyzer.js';
 export type { MultiProductDetectionResult } from './lib/gemini/gemini-product-cluster-analyzer.js';
 export { GeminiMaterialInferenceEngine } from './lib/gemini/gemini-material-inference.js';
@@ -27,6 +30,9 @@ export type { TrendyolListingInput } from './lib/prompts/trendyol-listing.js';
 // APUS — prompt builders
 export { buildImageClassificationPrompt } from './lib/prompts/image-classification.prompt.js';
 export type { ImageClassificationPromptInput } from './lib/prompts/image-classification.prompt.js';
+// APIA — product intelligence prompt
+export { buildProductIntelligencePrompt } from './lib/prompts/product-intelligence.prompt.js';
+export type { ProductIntelligencePromptInput } from './lib/prompts/product-intelligence.prompt.js';
 export { buildMultiProductDetectionPrompt } from './lib/prompts/multi-product-detection.prompt.js';
 export type { MultiProductDetectionInput, DetectedCluster } from './lib/prompts/multi-product-detection.prompt.js';
 export { buildMaterialInferencePrompt } from './lib/prompts/material-inference.prompt.js';
