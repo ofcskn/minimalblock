@@ -7,16 +7,21 @@ compatibility_flags = ["nodejs_compat"]
 enabled = true
 
 # ---------------------------------------------------------------------------
-# Secrets — set via Cloudflare dashboard or `wrangler secret put <KEY>`
-# Do NOT commit real values here. These are placeholders so wrangler knows
-# which bindings to expect at runtime.
+# Non-sensitive env vars — safe to commit, visible in wrangler.toml
 # ---------------------------------------------------------------------------
-# SUPABASE_URL
-# SUPABASE_SERVICE_ROLE_KEY
-# GEMINI_API_KEY
-# CORS_ORIGIN
-# TRENDYOL_MERCHANT_ID
-# TRENDYOL_API_KEY
-# TRENDYOL_API_SECRET
-# TRENDYOL_MOCK
+[vars]
+SUPABASE_URL = "https://your-project-ref.supabase.co"
+TRENDYOL_MOCK = "false"
+
+# ---------------------------------------------------------------------------
+# Secrets — must be set via Cloudflare dashboard or `wrangler secret put`
+# Do NOT commit real values here.
+# Required secrets:
+#   SUPABASE_SERVICE_ROLE_KEY
+#   GEMINI_API_KEY
+#   CORS_ORIGIN
+#   TRENDYOL_MERCHANT_ID
+#   TRENDYOL_API_KEY
+#   TRENDYOL_API_SECRET
+# ---------------------------------------------------------------------------
 
