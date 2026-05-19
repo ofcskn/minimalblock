@@ -1,11 +1,11 @@
 -- Performance indexes and PostgreSQL RPC functions to replace client-side JS aggregation.
 
 -- Composite index: speeds up getStatsForOwner and getHotspotStatsForOwner
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_events_owner_type_created
+CREATE INDEX IF NOT EXISTS idx_events_owner_type_created
   ON events(owner_id, event_type, created_at DESC);
 
 -- Composite index for generation_feedback lookups by conversion
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_generation_feedback_conversion
+CREATE INDEX IF NOT EXISTS idx_generation_feedback_conversion
   ON generation_feedback(conversion_id);
 
 -- ---------------------------------------------------------------------------
