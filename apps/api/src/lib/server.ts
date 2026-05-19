@@ -1,6 +1,3 @@
-import { Buffer } from 'node:buffer';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { URL } from 'node:url';
 import {
   Conversion,
   Product,
@@ -64,15 +61,14 @@ import { createClient, type SupabaseClient, type User } from '@supabase/supabase
 import type { Database } from '@minimalblock/data';
 
 export interface ApiEnv {
-  supabaseUrl: string;
-  supabaseServiceRoleKey: string;
-  geminiApiKey: string;
-  port: number;
-  corsOrigin: string;
-  trendyolMerchantId: string;
-  trendyolApiKey: string;
-  trendyolApiSecret: string;
-  trendyolMock: boolean;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
+  GEMINI_API_KEY: string;
+  CORS_ORIGIN?: string;
+  TRENDYOL_MERCHANT_ID?: string;
+  TRENDYOL_API_KEY?: string;
+  TRENDYOL_API_SECRET?: string;
+  TRENDYOL_MOCK?: string;
 }
 
 interface RequestContext {
@@ -83,76 +79,36 @@ interface RequestContext {
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 
-function getEnv(): ApiEnv {
-  const supabaseUrl = process.env['SUPABASE_URL'];
-  const supabaseServiceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-  const geminiApiKey = process.env['GEMINI_API_KEY'];
+function corsOrigin(env: ApiEnv): string {
+  return env.CORS_ORIGIN ?? '*';
+}
 
-  if (!supabaseUrl || !supabaseServiceRoleKey || !geminiApiKey) {
-    throw new Error('Missing required env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY');
-  }
-
+function corsHeaders(origin: string): Record<string, string> {
   return {
-    supabaseUrl,
-    supabaseServiceRoleKey,
-    geminiApiKey,
-    port: Number(process.env['API_PORT'] ?? 8787),
-    corsOrigin: process.env['CORS_ORIGIN'] ?? '*',
-    trendyolMerchantId: process.env['TRENDYOL_MERCHANT_ID'] ?? '',
-    trendyolApiKey: process.env['TRENDYOL_API_KEY'] ?? '',
-    trendyolApiSecret: process.env['TRENDYOL_API_SECRET'] ?? '',
-    trendyolMock: process.env['TRENDYOL_MOCK'] === 'true' || !process.env['TRENDYOL_MERCHANT_ID'],
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
+    'access-control-allow-headers': 'authorization,content-type',
   };
 }
 
+function jsonResponse(status: number, body: unknown, origin: string): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...JSON_HEADERS, ...corsHeaders(origin) },
+  });
+}
+
+function noContentResponse(origin: string): Response {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(origin),
+  });
+}
+
 function createAdminClient(env: ApiEnv): SupabaseClient<Database> {
-  return createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
+  return createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-}
-
-async function readJson<T>(req: IncomingMessage): Promise<T> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return JSON.parse(raw) as T;
-}
-
-function sendJson(res: ServerResponse, status: number, body: unknown, origin: string): void {
-  res.writeHead(status, {
-    ...JSON_HEADERS,
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
-    'access-control-allow-headers': 'authorization,content-type',
-  });
-  res.end(JSON.stringify(body));
-}
-
-function sendNoContent(res: ServerResponse, origin: string): void {
-  res.writeHead(204, {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
-    'access-control-allow-headers': 'authorization,content-type',
-  });
-  res.end();
-}
-
-async function authenticate(req: IncomingMessage, env: ApiEnv): Promise<RequestContext> {
-  const authorization = req.headers.authorization;
-  if (!authorization?.startsWith('Bearer ')) {
-    throw new Error('Unauthorized');
-  }
-
-  const admin = createAdminClient(env);
-  const token = authorization.slice('Bearer '.length);
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) {
-    throw new Error('Unauthorized');
-  }
-
-  return { env, admin, user: data.user };
 }
 
 function toMediaAsset(input: ApiMediaAssetInput, kind: 'source-image' | 'generated-model'): MediaAsset {
@@ -219,7 +175,7 @@ async function fetchAssetBase64(asset: MediaAsset): Promise<{ mimeType: string; 
   const arrayBuffer = await response.arrayBuffer();
   return {
     mimeType: asset.mimeType,
-    data: Buffer.from(arrayBuffer).toString('base64'),
+    data: btoa(String.fromCharCode(...new Uint8Array(arrayBuffer))),
   };
 }
 
@@ -231,7 +187,11 @@ async function uploadGeneratedModel(
 ): Promise<MediaAsset> {
   const dataUrl = modelAsset.url;
   const encoded = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  const bytes = Buffer.from(encoded, 'base64');
+  const binaryStr = atob(encoded);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
   const key = `${ownerId}/generated/${Date.now()}-${slugify(productName)}.glb`;
   const { error } = await admin.storage.from('media-assets').upload(key, bytes, {
     contentType: 'model/gltf-binary',
@@ -365,7 +325,7 @@ function getImportedSourceAssets(product: Product): MediaAsset[] {
 }
 
 async function analyzeProductWithGemini(ctx: RequestContext, product: Product, sourceAssets: MediaAsset[] = []): Promise<ProductAiAnalysis> {
-  const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+  const model = createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID);
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     {
       text:
@@ -419,7 +379,7 @@ async function analyzeProductWithGemini(ctx: RequestContext, product: Product, s
 }
 
 async function generateSuggestedHotspots(ctx: RequestContext, product: Product, sourceAssets: MediaAsset[] = []): Promise<SuggestedHotspot[]> {
-  const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+  const model = createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID);
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     {
       text:
@@ -498,7 +458,7 @@ async function handleImportProductUrl(ctx: RequestContext, req: ImportProductUrl
   const service = new ProductImportService({
     admin: ctx.admin,
     ownerId: ctx.user.id,
-    geminiApiKey: ctx.env.geminiApiKey,
+    geminiApiKey: ctx.env.GEMINI_API_KEY,
   });
   const imported = await service.importFromUrl(req.url);
 
@@ -659,7 +619,7 @@ async function handleRetryImportedProduct(ctx: RequestContext, productId: string
   const service = new ProductImportService({
     admin: ctx.admin,
     ownerId: ctx.user.id,
-    geminiApiKey: ctx.env.geminiApiKey,
+    geminiApiKey: ctx.env.GEMINI_API_KEY,
   });
   const imported = await service.importFromUrl(sourceUrl);
   product = await productRepo.save(
@@ -685,7 +645,7 @@ async function handleRetryImportedProduct(ctx: RequestContext, productId: string
 }
 
 async function generateSuggestedCopy(ctx: RequestContext, product: Product): Promise<ProductAiCopy | null> {
-  const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+  const model = createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID);
   const result = await model.generateContent(
     `Write ecommerce copy for this product and respond with JSON only.\n` +
       `Schema: {"seoTitle":"string","bullets":["string"],"description":"string"}\n` +
@@ -695,7 +655,7 @@ async function generateSuggestedCopy(ctx: RequestContext, product: Product): Pro
 }
 
 async function generateReturnRisk(ctx: RequestContext, product: Product): Promise<Array<{ risk: string; fix: string }>> {
-  const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+  const model = createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID);
   const result = await model.generateContent(
     `Analyze return-risk for this ecommerce product and respond with JSON only.\n` +
       `Schema: [{"risk":"string","fix":"string"}]\n` +
@@ -743,8 +703,8 @@ async function createConversionForProduct(
       );
     } else {
       const generator = new GeminiModelGenerator(
-        createGenerativeModel(ctx.env.geminiApiKey),
-        createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID),
+        createGenerativeModel(ctx.env.GEMINI_API_KEY),
+        createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID),
       );
       const generated = await generator.generate({
         sourceAsset:              sourceAssets[0],
@@ -768,7 +728,7 @@ async function createConversionForProduct(
 
       if (generated.generatedPrimitive) {
         const sourceImageUrls = sourceAssets.map((a) => a.url);
-        const visualQa = new GeminiVisualQa(createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID));
+        const visualQa = new GeminiVisualQa(createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID));
         let qaResult: GeminiQaResult | undefined;
         try {
           qaResult = await visualQa.evaluate({
@@ -777,7 +737,7 @@ async function createConversionForProduct(
             generatedPrimitive: generated.generatedPrimitive,
           });
         } catch {
-          // Visual QA failure is non-fatal — proceed without it
+          // Visual QA failure is non-fatal
         }
         const quality = createQualityReport(outputAsset, sourceAssets.length, qaResult, true);
         conversion = await conversionRepo.save(conversion.markAwaitingApproval(outputAsset, quality));
@@ -867,7 +827,6 @@ async function handleApproveConversion(ctx: RequestContext, conversionId: string
   await eventsRepo.track(approved.productId, ctx.user.id, 'conversion_approved');
   await eventsRepo.track(approved.productId, ctx.user.id, 'product_published');
 
-  // Phase I: Record approval signal for feedback loop
   await new GenerationFeedbackService(ctx.admin, ctx.user.id)
     .recordApproval(
       approved.productId,
@@ -890,7 +849,6 @@ async function handleRejectConversion(
   const rejected = await conversionRepo.save(conversion.reject(req.reason));
   await eventsRepo.track(rejected.productId, ctx.user.id, 'conversion_rejected', { reason: req.reason });
 
-  // Phase I: Record rejection signal for feedback loop
   await new GenerationFeedbackService(ctx.admin, ctx.user.id)
     .recordRejection(
       rejected.productId,
@@ -954,8 +912,6 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
 
   let qaRecommendations: string[] = conversion?.qualityReport?.geminiQaReport?.recommendedActions ?? [];
 
-  // If the stored quality report lacks a Gemini QA result but we have source assets
-  // and an output asset, try to re-run visual QA now (best-effort).
   if (
     conversion?.outputAsset &&
     conversion.sourceAssets.length > 0 &&
@@ -963,9 +919,7 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
     conversion.qualityReport.geminiQaScore === undefined
   ) {
     try {
-      // We don't have the original shape params at this point, so we send a
-      // generic "primitive mesh" description via a simplified QA call.
-      const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+      const model = createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID);
       const genericPrimitive = {
         shape: 'box' as const,
         detectedType: 'other',
@@ -984,7 +938,7 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
       });
       qaRecommendations = qaResult.recommendedActions;
     } catch {
-      // Non-fatal — fall through
+      // Non-fatal
     }
   }
 
@@ -1020,14 +974,12 @@ async function handleQualityCheck(ctx: RequestContext, req: QualityCheckRequest)
 
 function createTrendyolClient(env: ApiEnv): TrendyolClient {
   return new TrendyolClient({
-    sellerId: env.trendyolMerchantId,
-    apiKey: env.trendyolApiKey,
-    apiSecret: env.trendyolApiSecret,
-    mock: env.trendyolMock,
+    sellerId: env.TRENDYOL_MERCHANT_ID ?? '',
+    apiKey: env.TRENDYOL_API_KEY ?? '',
+    apiSecret: env.TRENDYOL_API_SECRET ?? '',
+    mock: env.TRENDYOL_MOCK === 'true' || !env.TRENDYOL_MERCHANT_ID,
   });
 }
-
-// --- Trendyol: Gemini listing generation ---
 
 async function handleTrendyolListing(
   ctx: RequestContext,
@@ -1036,7 +988,7 @@ async function handleTrendyolListing(
   const product = await getOwnedProduct(ctx, req.productId);
   const conversion = await getLatestConversionForProduct(ctx, product.id);
 
-  const model = createGenerativeModel(ctx.env.geminiApiKey, ANALYSIS_MODEL_ID);
+  const model = createGenerativeModel(ctx.env.GEMINI_API_KEY, ANALYSIS_MODEL_ID);
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     { text: buildTrendyolListingPrompt({ productName: product.name, productCategory: product.category }) },
   ];
@@ -1068,8 +1020,6 @@ async function handleTrendyolListing(
 
   return { draft };
 }
-
-// --- Trendyol: product catalog ---
 
 async function handleTrendyolCreateProducts(
   ctx: RequestContext,
@@ -1106,8 +1056,6 @@ async function handleTrendyolBuybox(
   return client.getBuyboxInformation(req.barcodes.slice(0, 10));
 }
 
-// --- Trendyol: orders ---
-
 async function handleTrendyolOrders(
   ctx: RequestContext,
   params: ShipmentPackagesParams,
@@ -1127,174 +1075,160 @@ async function handleTrendyolUpdateOrderStatus(
   return { ok: true };
 }
 
-function notFound(): never {
-  throw new Error('Not found');
+async function authenticate(request: Request, env: ApiEnv): Promise<RequestContext> {
+  const authorization = request.headers.get('authorization');
+  if (!authorization?.startsWith('Bearer ')) {
+    throw new Error('Unauthorized');
+  }
+
+  const admin = createAdminClient(env);
+  const token = authorization.slice('Bearer '.length);
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) {
+    throw new Error('Unauthorized');
+  }
+
+  return { env, admin, user: data.user };
 }
 
-export function createApiServer(env = getEnv()) {
-  return createServer(async (req, res) => {
-    if (!req.url || !req.method) {
-      sendJson(res, 400, { error: 'Bad request' }, env.corsOrigin);
-      return;
+/**
+ * Main Workers fetch handler. Receives a Web API Request, returns a Web API Response.
+ * All route matching and dispatching happens here — no Node.js HTTP primitives used.
+ */
+export async function handleRequest(request: Request, env: ApiEnv): Promise<Response> {
+  const origin = corsOrigin(env);
+  const method = request.method;
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  if (method === 'OPTIONS') {
+    return noContentResponse(origin);
+  }
+
+  if (method === 'GET' && pathname === '/health') {
+    return jsonResponse(200, { ok: true }, origin);
+  }
+
+  try {
+    const ctx = await authenticate(request, env);
+
+    if (method === 'POST' && pathname === '/api/conversions') {
+      const body = await request.json() as CreateConversionRequest;
+      return jsonResponse(200, await handleCreateConversion(ctx, body), origin);
     }
 
-    if (req.method === 'OPTIONS') {
-      sendNoContent(res, env.corsOrigin);
-      return;
+    if (method === 'POST' && pathname === '/api/products/import-url') {
+      const body = await request.json() as ImportProductUrlRequest;
+      return jsonResponse(200, await handleImportProductUrl(ctx, body), origin);
     }
 
-    if (req.method === 'GET' && req.url === '/health') {
-      sendJson(res, 200, { ok: true }, env.corsOrigin);
-      return;
+    const importReviewMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/review$/);
+    if (method === 'POST' && importReviewMatch) {
+      const body = await request.json() as SaveImportedReviewRequest;
+      return jsonResponse(200, await handleSaveImportedReview(ctx, importReviewMatch[1], body), origin);
     }
 
-    try {
-      const ctx = await authenticate(req, env);
-      const url = new URL(req.url, `http://localhost:${env.port}`);
-      const pathname = url.pathname;
-
-      if (req.method === 'POST' && pathname === '/api/conversions') {
-        const body = await readJson<CreateConversionRequest>(req);
-        sendJson(res, 200, await handleCreateConversion(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/products/import-url') {
-        const body = await readJson<ImportProductUrlRequest>(req);
-        sendJson(res, 200, await handleImportProductUrl(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      const importReviewMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/review$/);
-      if (req.method === 'POST' && importReviewMatch) {
-        const body = await readJson<SaveImportedReviewRequest>(req);
-        sendJson(res, 200, await handleSaveImportedReview(ctx, importReviewMatch[1], body), env.corsOrigin);
-        return;
-      }
-
-      const importRetryMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/retry$/);
-      if (req.method === 'POST' && importRetryMatch) {
-        sendJson(res, 200, await handleRetryImportedProduct(ctx, importRetryMatch[1]), env.corsOrigin);
-        return;
-      }
-
-      const acceptClusterMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/accept-cluster$/);
-      if (req.method === 'POST' && acceptClusterMatch) {
-        const body = await readJson<AcceptProductClusterRequest>(req);
-        sendJson(res, 200, await handleAcceptProductCluster(ctx, acceptClusterMatch[1], body), env.corsOrigin);
-        return;
-      }
-
-      const import3dMatch = pathname.match(/^\/api\/products\/([^/]+)\/try-3d$/);
-      if (req.method === 'POST' && import3dMatch) {
-        sendJson(res, 200, await handleTryImportedProduct3d(ctx, import3dMatch[1]), env.corsOrigin);
-        return;
-      }
-
-      const conversionMatch = pathname.match(/^\/api\/conversions\/([^/]+)$/);
-      if (req.method === 'GET' && conversionMatch) {
-        sendJson(res, 200, await handleGetConversion(ctx, conversionMatch[1]), env.corsOrigin);
-        return;
-      }
-
-      const approveMatch = pathname.match(/^\/api\/conversions\/([^/]+)\/approve$/);
-      if (req.method === 'POST' && approveMatch) {
-        sendJson(res, 200, await handleApproveConversion(ctx, approveMatch[1]), env.corsOrigin);
-        return;
-      }
-
-      const rejectMatch = pathname.match(/^\/api\/conversions\/([^/]+)\/reject$/);
-      if (req.method === 'POST' && rejectMatch) {
-        const body = await readJson<RejectConversionRequest>(req);
-        sendJson(res, 200, await handleRejectConversion(ctx, rejectMatch[1], body), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/ai/analyze-product') {
-        const body = await readJson<AnalyzeProductRequest>(req);
-        sendJson(res, 200, await handleAnalyzeProduct(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/ai/generate-hotspots') {
-        const body = await readJson<GenerateHotspotsRequest>(req);
-        sendJson(res, 200, await handleGenerateHotspots(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/ai/generate-description') {
-        const body = await readJson<GenerateDescriptionRequest>(req);
-        sendJson(res, 200, await handleGenerateDescription(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/ai/return-risk') {
-        const body = await readJson<ReturnRiskRequest>(req);
-        sendJson(res, 200, await handleReturnRisk(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/ai/quality-check') {
-        const body = await readJson<QualityCheckRequest>(req);
-        sendJson(res, 200, await handleQualityCheck(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      // --- Trendyol: AI listing ---
-      if (req.method === 'POST' && pathname === '/api/ai/trendyol-listing') {
-        const body = await readJson<{ productId: string }>(req);
-        sendJson(res, 200, await handleTrendyolListing(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      // --- Trendyol: products ---
-      if (req.method === 'POST' && pathname === '/api/trendyol/products') {
-        const body = await readJson<{ items: TrendyolProduct[] }>(req);
-        sendJson(res, 200, await handleTrendyolCreateProducts(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      const batchMatch = pathname.match(/^\/api\/trendyol\/products\/batch\/([^/]+)$/);
-      if (req.method === 'GET' && batchMatch) {
-        sendJson(res, 200, await handleTrendyolPollBatch(ctx, batchMatch[1]), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'GET' && pathname === '/api/trendyol/unapproved') {
-        const page = Number(url.searchParams.get('page') ?? '0');
-        sendJson(res, 200, await handleTrendyolUnapproved(ctx, page), env.corsOrigin);
-        return;
-      }
-
-      if (req.method === 'POST' && pathname === '/api/trendyol/buybox') {
-        const body = await readJson<{ barcodes: string[] }>(req);
-        sendJson(res, 200, await handleTrendyolBuybox(ctx, body), env.corsOrigin);
-        return;
-      }
-
-      // --- Trendyol: orders ---
-      if (req.method === 'GET' && pathname === '/api/trendyol/orders') {
-        const params: ShipmentPackagesParams = {
-          page: Number(url.searchParams.get('page') ?? '0'),
-          size: Number(url.searchParams.get('size') ?? '50'),
-          status: url.searchParams.get('status') ?? undefined,
-        };
-        sendJson(res, 200, await handleTrendyolOrders(ctx, params), env.corsOrigin);
-        return;
-      }
-
-      const orderStatusMatch = pathname.match(/^\/api\/trendyol\/orders\/([^/]+)\/status$/);
-      if (req.method === 'PUT' && orderStatusMatch) {
-        const body = await readJson<{ status: 'Picking' | 'Invoiced'; invoiceNumber?: string }>(req);
-        sendJson(res, 200, await handleTrendyolUpdateOrderStatus(ctx, orderStatusMatch[1], body), env.corsOrigin);
-        return;
-      }
-
-      notFound();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unexpected error';
-      const status = message === 'Unauthorized' ? 401 : message === 'Not found' ? 404 : message === 'Invalid request' ? 400 : 500;
-      sendJson(res, status, { error: message }, env.corsOrigin);
+    const importRetryMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/retry$/);
+    if (method === 'POST' && importRetryMatch) {
+      return jsonResponse(200, await handleRetryImportedProduct(ctx, importRetryMatch[1]), origin);
     }
-  });
+
+    const acceptClusterMatch = pathname.match(/^\/api\/products\/([^/]+)\/import\/accept-cluster$/);
+    if (method === 'POST' && acceptClusterMatch) {
+      const body = await request.json() as AcceptProductClusterRequest;
+      return jsonResponse(200, await handleAcceptProductCluster(ctx, acceptClusterMatch[1], body), origin);
+    }
+
+    const import3dMatch = pathname.match(/^\/api\/products\/([^/]+)\/try-3d$/);
+    if (method === 'POST' && import3dMatch) {
+      return jsonResponse(200, await handleTryImportedProduct3d(ctx, import3dMatch[1]), origin);
+    }
+
+    const conversionMatch = pathname.match(/^\/api\/conversions\/([^/]+)$/);
+    if (method === 'GET' && conversionMatch) {
+      return jsonResponse(200, await handleGetConversion(ctx, conversionMatch[1]), origin);
+    }
+
+    const approveMatch = pathname.match(/^\/api\/conversions\/([^/]+)\/approve$/);
+    if (method === 'POST' && approveMatch) {
+      return jsonResponse(200, await handleApproveConversion(ctx, approveMatch[1]), origin);
+    }
+
+    const rejectMatch = pathname.match(/^\/api\/conversions\/([^/]+)\/reject$/);
+    if (method === 'POST' && rejectMatch) {
+      const body = await request.json() as RejectConversionRequest;
+      return jsonResponse(200, await handleRejectConversion(ctx, rejectMatch[1], body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/analyze-product') {
+      const body = await request.json() as AnalyzeProductRequest;
+      return jsonResponse(200, await handleAnalyzeProduct(ctx, body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/generate-hotspots') {
+      const body = await request.json() as GenerateHotspotsRequest;
+      return jsonResponse(200, await handleGenerateHotspots(ctx, body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/generate-description') {
+      const body = await request.json() as GenerateDescriptionRequest;
+      return jsonResponse(200, await handleGenerateDescription(ctx, body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/return-risk') {
+      const body = await request.json() as ReturnRiskRequest;
+      return jsonResponse(200, await handleReturnRisk(ctx, body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/quality-check') {
+      const body = await request.json() as QualityCheckRequest;
+      return jsonResponse(200, await handleQualityCheck(ctx, body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/ai/trendyol-listing') {
+      const body = await request.json() as { productId: string };
+      return jsonResponse(200, await handleTrendyolListing(ctx, body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/trendyol/products') {
+      const body = await request.json() as { items: TrendyolProduct[] };
+      return jsonResponse(200, await handleTrendyolCreateProducts(ctx, body), origin);
+    }
+
+    const batchMatch = pathname.match(/^\/api\/trendyol\/products\/batch\/([^/]+)$/);
+    if (method === 'GET' && batchMatch) {
+      return jsonResponse(200, await handleTrendyolPollBatch(ctx, batchMatch[1]), origin);
+    }
+
+    if (method === 'GET' && pathname === '/api/trendyol/unapproved') {
+      const page = Number(url.searchParams.get('page') ?? '0');
+      return jsonResponse(200, await handleTrendyolUnapproved(ctx, page), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/trendyol/buybox') {
+      const body = await request.json() as { barcodes: string[] };
+      return jsonResponse(200, await handleTrendyolBuybox(ctx, body), origin);
+    }
+
+    if (method === 'GET' && pathname === '/api/trendyol/orders') {
+      const params: ShipmentPackagesParams = {
+        page: Number(url.searchParams.get('page') ?? '0'),
+        size: Number(url.searchParams.get('size') ?? '50'),
+        status: url.searchParams.get('status') ?? undefined,
+      };
+      return jsonResponse(200, await handleTrendyolOrders(ctx, params), origin);
+    }
+
+    const orderStatusMatch = pathname.match(/^\/api\/trendyol\/orders\/([^/]+)\/status$/);
+    if (method === 'PUT' && orderStatusMatch) {
+      const body = await request.json() as { status: 'Picking' | 'Invoiced'; invoiceNumber?: string };
+      return jsonResponse(200, await handleTrendyolUpdateOrderStatus(ctx, orderStatusMatch[1], body), origin);
+    }
+
+    return jsonResponse(404, { error: 'Not found' }, origin);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    const status = message === 'Unauthorized' ? 401 : message === 'Not found' ? 404 : message === 'Invalid request' ? 400 : 500;
+    return jsonResponse(status, { error: message }, origin);
+  }
 }

@@ -1,0 +1,27 @@
+name = "minimalblock"
+main = "../../dist/apps/api/worker.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# ---------------------------------------------------------------------------
+# Secrets — set via Cloudflare dashboard or `wrangler secret put <KEY>`
+# Do NOT commit real values here. These are placeholders so wrangler knows
+# which bindings to expect at runtime.
+# ---------------------------------------------------------------------------
+# SUPABASE_URL
+# SUPABASE_SERVICE_ROLE_KEY
+# GEMINI_API_KEY
+# CORS_ORIGIN
+# TRENDYOL_MERCHANT_ID
+# TRENDYOL_API_KEY
+# TRENDYOL_API_SECRET
+# TRENDYOL_MOCK
+
+[env.production]
+name = "minimalblock"
+
+[env.preview]
+name = "minimalblock-preview"
