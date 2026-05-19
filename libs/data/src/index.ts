@@ -15,6 +15,7 @@ export { SupabaseEventsRepository } from './lib/repositories/events.repository.j
 export type { EventType, ProductStats, HotspotStat } from './lib/repositories/events.repository.js';
 export { SupabaseEmbedViewsRepository } from './lib/repositories/embed-views.repository.js';
 export type { EmbedDomainStat } from './lib/repositories/embed-views.repository.js';
+export { SupabaseBrandRepository } from './lib/repositories/brand.repository.js';
 
 // Demo seed data
 export { DEMO_PRODUCT_FAILED, DEMO_PRODUCT_SUCCESS, DEMO_PRODUCT_WARNING } from './lib/demo/demo-products.js';

@@ -289,9 +289,119 @@ export type Database = {
         };
         Relationships: [];
       };
+      brands: {
+        Row: {
+          id: string;
+          owner_id: string;
+          name: string;
+          description: string;
+          website: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          name?: string;
+          description?: string;
+          website?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          name?: string;
+          description?: string;
+          website?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      brand_logos: {
+        Row: {
+          id: string;
+          brand_id: string;
+          owner_id: string;
+          storage_key: string;
+          public_url: string;
+          name: string;
+          ordinal: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          brand_id: string;
+          owner_id: string;
+          storage_key: string;
+          public_url: string;
+          name?: string;
+          ordinal?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          brand_id?: string;
+          owner_id?: string;
+          storage_key?: string;
+          public_url?: string;
+          name?: string;
+          ordinal?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      brand_colors: {
+        Row: {
+          id: string;
+          brand_id: string;
+          owner_id: string;
+          hex: string;
+          name: string;
+          ordinal: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          brand_id: string;
+          owner_id: string;
+          hex: string;
+          name?: string;
+          ordinal?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          brand_id?: string;
+          owner_id?: string;
+          hex?: string;
+          name?: string;
+          ordinal?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      get_stats_for_owner: {
+        Args: { p_owner_id: string };
+        Returns: { product_id: string; event_type: string; event_count: number }[];
+      };
+      get_hotspot_stats_for_owner: {
+        Args: { p_owner_id: string };
+        Returns: { product_id: string; hotspot_label: string; click_count: number }[];
+      };
+      get_avg_session_duration: {
+        Args: { p_owner_id: string };
+        Returns: { product_id: string; avg_duration_ms: number }[];
+      };
+      get_embed_domains_for_owner: {
+        Args: { p_owner_id: string; p_limit?: number };
+        Returns: { domain: string; view_count: number }[];
+      };
+    };
     Enums: {
       conversion_status: ConversionStatus;
     };

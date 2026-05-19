@@ -1,6 +1,7 @@
 // Domain — Entities
 export * from './lib/domain/entities/product.entity.js';
 export * from './lib/domain/entities/user.entity.js';
+export * from './lib/domain/entities/brand.entity.js';
 
 // Domain — Value Objects
 export * from './lib/domain/value-objects/media-asset.vo.js';
