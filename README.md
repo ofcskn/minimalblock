@@ -1,6 +1,6 @@
 # Minimal Block
 
-> **AI-powered 3D product previews for e-commerce.** Upload a 2D product photo; receive an embeddable, interactive GLB model in seconds — powered by Google Gemini, hosted on Cloudflare Workers, backed by Supabase.
+> **AI-powered e-commerce product modeling platform** that transforms product images and URLs into customizable 3D assets using advanced computer vision and generative AI. The system automatically extracts product data, analyzes visuals, generates intelligent parameter sets, and creates scalable 3D-ready mockups for online stores, marketplaces, and digital commerce workflows. Built for automation, rapid prototyping, and next-generation AI-driven product visualization.
 
 [![CI](https://github.com/ofcskn/minimalblock/actions/workflows/ci.yml/badge.svg)](https://github.com/ofcskn/minimalblock/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -56,14 +56,21 @@
 
 ## Overview
 
-Minimal Block turns a flat product photograph into a fully interactive 3D model that merchants can embed directly in their storefront or share via a QR code — no 3D modelling expertise required.
+Minimal Block is an **AI-powered e-commerce product modeling platform** that automates the full pipeline from raw product data to interactive 3D assets. Feed it a product image or a marketplace URL — it extracts metadata, analyzes visual features with computer vision, infers geometry and materials, generates intelligent parameter sets, and outputs customizable 3D-ready mockups.
 
-The system uses **Google Gemini** multimodal AI for visual analysis, geometry classification, material inference, and GLB generation. All AI calls happen **server-side only** inside a Cloudflare Worker — the browser never touches the Gemini API key.
+The platform is built for three core workflows:
+
+- **Automation** — scrape, analyze, and generate 3D assets at scale without manual 3D modelling
+- **Rapid prototyping** — iterate on product visuals instantly using AI-driven parameter generation
+- **Next-generation visualization** — deploy interactive, embeddable 3D experiences to any storefront or marketplace
+
+All AI processing runs **server-side only** inside a Cloudflare Worker — credentials never reach the browser.
 
 **Target users:**
-- E-commerce merchants wanting immersive product pages without a 3D design team
-- Developers integrating 3D previews into existing storefronts
-- Marketplace sellers on platforms like Trendyol, IKEA, and Amazon
+- E-commerce merchants who need 3D product pages without a design team
+- Developers integrating AI-driven visualization into existing storefronts
+- Marketplace sellers on Trendyol, IKEA, Amazon, and similar platforms
+- Agencies building scalable product content pipelines
 
 ---
 
@@ -71,19 +78,20 @@ The system uses **Google Gemini** multimodal AI for visual analysis, geometry cl
 
 | Feature | Description |
 |---|---|
-| **One-click 3D generation** | Upload a product photo → receive a GLB model in seconds |
-| **AI image analysis** | Gemini analyzes geometry, materials, lighting, and quality |
-| **Category-aware generation** | Specialized generators for furniture, clothing, electronics, jewelry, vehicles, and packaging |
-| **Interactive hotspots** | Add clickable callouts to 3D models (positions, labels, links) |
-| **Brand placement** | Embed logo/watermark onto generated models |
-| **AI diagnosis panel** | Readiness score for source images before generation |
-| **Multi-product detection** | Identify and separate clustered items in a single photo |
-| **Product import** | Scrape metadata & images from Trendyol, IKEA, Amazon, and generic URLs |
-| **Embeddable viewer** | `<model-viewer>` web component — works in any HTML page |
-| **QR code sharing** | Generate scannable codes to any public model URL |
-| **Analytics events** | Track views, conversions, and interactions |
+| **Automated 3D generation** | Upload a product photo or paste a URL → receive a production-ready GLB model |
+| **Computer vision analysis** | Extracts geometry, materials, lighting conditions, and quality scores from source images |
+| **Intelligent parameter generation** | AI infers category, dimensions, surface properties, and generation parameters automatically |
+| **Category-aware modeling** | Specialized generators for furniture, clothing, electronics, jewelry, vehicles, and packaging |
+| **Product data extraction** | Scrapes metadata and images from Trendyol, IKEA, Amazon, and generic URLs |
+| **AI diagnosis panel** | Image readiness scoring before generation to prevent low-quality outputs |
+| **Multi-product detection** | Identifies and separates clustered items in a single photograph |
+| **Interactive hotspots** | Attach clickable callouts (labels, links, positions) directly to 3D models |
+| **Brand placement** | Embed logos and watermarks onto generated models |
+| **Embeddable viewer** | `<model-viewer>` web component — drops into any HTML page with one line |
+| **QR code sharing** | Scannable codes linking directly to any public model URL |
+| **Analytics events** | Track views, conversions, and user interactions per asset |
 | **Bilingual UI** | Full English and Turkish interface |
-| **Row-Level Security** | All data scoped to the authenticated owner |
+| **Row-Level Security** | All data scoped to the authenticated owner via Supabase RLS |
 
 ---
 
@@ -151,7 +159,7 @@ minimalblock/
 │ Google Gemini │               │    Supabase      │
 │ 2.0 Flash API │               │ PostgreSQL + RLS │
 │               │               │ Storage (CDN)   │
-│ • Image anal. │               │ Auth (JWT)      │
+│ • Vision      │               │ Auth (JWT)      │
 │ • 3D gen.    │               │                 │
 │ • Materials  │               └─────────────────┘
 │ • Geometry   │
@@ -161,17 +169,17 @@ minimalblock/
 ### Data Flow
 
 ```
-1. User uploads product photo
+1. User provides a product image or marketplace URL
        │
        ▼
-2. Worker receives file → stores in Supabase Storage
+2. Worker receives input → stores source assets in Supabase Storage
        │
        ▼
-3. Gemini image-analyzer extracts visual features
-   (geometry, materials, lighting quality, category)
+3. Computer vision pipeline extracts visual features
+   (geometry, materials, lighting quality, category classification)
        │
        ▼
-4. Category-specific generator builds 3D prompt
+4. AI parameter generation builds category-specific 3D prompt
    (furniture / clothing / electronics / jewelry / vehicle / packaging)
        │
        ▼
@@ -219,7 +227,7 @@ minimalblock/
 | Technology | Purpose |
 |---|---|
 | Cloudflare Workers | Serverless compute (Node.js compat mode) |
-| Google Gemini 2.0 Flash | Multimodal AI for 3D generation & analysis |
+| Google Gemini 2.0 Flash | Multimodal AI for 3D generation & visual analysis |
 | Supabase JS | Database client + storage + auth |
 | Web Standard Request/Response | Framework-free HTTP routing |
 | esbuild | Worker bundle compilation |
@@ -374,10 +382,10 @@ The database is managed through 16 sequential migrations in `supabase/migrations
 
 ```
 products              — User product inventory
-conversions           — 2D-to-3D conversion jobs & results
+conversions           — Image-to-3D conversion jobs & results
 hotspots              — Interactive model annotations
 hotspots_suggested    — AI-recommended hotspot positions
-ai_insights           — Extracted product intelligence
+ai_insights           — Extracted product intelligence & parameters
 generation_jobs       — Long-running Gemini job tracking
 generation_feedback   — User quality ratings
 events                — Analytics event stream
@@ -443,16 +451,19 @@ Public product pages use a separate `public` schema view that exposes only expli
 All AI processing happens inside `apps/api` — Gemini credentials are **never** sent to the browser.
 
 ```
-Input photo
+Input (image or URL)
     │
     ▼
-gemini-image-analyzer         ← visual features, quality assessment
+gemini-image-analyzer         ← computer vision: visual features, quality assessment
     │
     ▼
 gemini-geometry-classifier    ← shape & structural analysis
     │
     ▼
 gemini-product-understanding  ← metadata extraction (name, materials, category)
+    │
+    ▼
+ai-parameter-generator        ← generates intelligent 3D parameter set
     │
     ▼
 category-generator.factory    ← selects specialized generator
@@ -485,7 +496,7 @@ Supabase Storage              ← GLB stored, signed URL returned
 
 ### Category Generators
 
-Each product category uses a tailored 3D generation strategy:
+Each product category uses a tailored 3D generation strategy with category-specific parameter sets:
 
 | Generator | Category | Key considerations |
 |---|---|---|

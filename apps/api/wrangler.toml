@@ -10,7 +10,7 @@ enabled = true
 # Non-sensitive env vars — safe to commit, visible in wrangler.toml
 # ---------------------------------------------------------------------------
 [vars]
-SUPABASE_URL=https://pmzdxgndbzpctfkjtjdp.supabase.co
+SUPABASE_URL = "https://pmzdxgndbzpctfkjtjdp.supabase.co"
 TRENDYOL_MOCK = "false"
 
 # ---------------------------------------------------------------------------
