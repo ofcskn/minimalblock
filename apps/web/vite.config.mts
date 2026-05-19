@@ -34,13 +34,14 @@ export default defineConfig(() => ({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-i18n': ['i18next', 'react-i18next'],
-          'vendor-query': ['@tanstack/react-query'],
-          'vendor-virtual': ['@tanstack/react-virtual'],
-          'vendor-qrcode': ['qrcode'],
+        manualChunks(id) {
+          if (id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
+          if (id.includes('node_modules/react/')) return 'vendor-react';
+          if (id.includes('@supabase/supabase-js')) return 'vendor-supabase';
+          if (id.includes('i18next') || id.includes('react-i18next')) return 'vendor-i18n';
+          if (id.includes('@tanstack/react-query')) return 'vendor-query';
+          if (id.includes('@tanstack/react-virtual')) return 'vendor-virtual';
+          if (id.includes('qrcode')) return 'vendor-qrcode';
         },
       },
     },
