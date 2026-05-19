@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "ofcskn/minimalblock" }],
+  "commit": false,
+  "fixed": [],
+  "linked": [
+    [
+      "@minimalblock/core",
+      "@minimalblock/data",
+      "@minimalblock/features",
+      "@minimalblock/ui",
+      "@minimalblock/ai",
+      "@minimalblock/trendyol"
+    ]
+  ],
+  "access": "restricted",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [],
+  "privatePackages": { "version": true, "tag": false },
+  "snapshot": {
+    "useCalculatedVersion": true,
+    "prereleaseTemplate": null
+  }
+}

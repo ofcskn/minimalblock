@@ -1,0 +1,14 @@
+#!/bin/sh
+# Validate branch naming convention before push.
+# Allowed: main, development, release/X.Y.x, feat/*, fix/*, chore/*, docs/*, refactor/*, perf/*, hotfix/*
+branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "detached")
+pattern="^(main|development|release/[0-9]+\.[0-9]+\.x|hotfix/.+|feat/.+|fix/.+|chore/.+|docs/.+|refactor/.+|perf/.+|test/.+|ci/.+|deps/.+)$"
+
+if ! echo "$branch" | grep -qE "$pattern"; then
+  echo ""
+  echo "  Branch name '$branch' does not follow the naming convention."
+  echo "  Allowed patterns: main, development, release/X.Y.x, feat/*, fix/*, hotfix/*, chore/*, etc."
+  echo "  See CONTRIBUTING.md for the full branch naming guide."
+  echo ""
+  exit 1
+fi
