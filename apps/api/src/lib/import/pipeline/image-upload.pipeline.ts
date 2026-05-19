@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import { generateId, type ImportedImageCandidate, type MediaAssetType } from '@minimalblock/core';
 import type { ScrapedImageCandidate } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -17,11 +16,14 @@ function mimeExtension(mimeType: string): string {
   }
 }
 
-function decodeDataUrl(raw: string): { mimeType: string; buffer: Buffer } | null {
+function decodeDataUrl(raw: string): { mimeType: string; buffer: Uint8Array } | null {
   if (!raw.startsWith('data:')) return null;
   const match = raw.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) return null;
-  return { mimeType: match[1], buffer: Buffer.from(match[2], 'base64') };
+  const binaryStr = atob(match[2]);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+  return { mimeType: match[1], buffer: bytes };
 }
 
 export type UploadedImportImage = ImportedImageCandidate;
@@ -76,7 +78,7 @@ export class ImageUploadPipeline {
         ? mimeType
         : 'image/jpeg';
 
-    const bytes = decoded?.buffer ?? Buffer.from(await response!.arrayBuffer());
+    const bytes = decoded?.buffer ?? new Uint8Array(await response!.arrayBuffer());
     const fileName = `${Date.now()}-${slugify(image.title ?? image.alt ?? `import-${image.ordinal}`)}.${mimeExtension(normalizedMimeType)}`;
     const storageKey = `${this.ownerId}/imports/${fileName}`;
 

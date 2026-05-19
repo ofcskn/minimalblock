@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import type { IPageScraperAdapter, ScrapedPageData } from '@minimalblock/core';
 
 function normalizeDomain(url: URL): string {
@@ -7,7 +6,7 @@ function normalizeDomain(url: URL): string {
 
 function buildMockDataUrl(label: string, color: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200"><rect width="100%" height="100%" fill="${color}"/><text x="50%" y="50%" font-family="Arial" font-size="84" text-anchor="middle" fill="#ffffff">${label}</text></svg>`;
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
 export class MockAdapter implements IPageScraperAdapter {
