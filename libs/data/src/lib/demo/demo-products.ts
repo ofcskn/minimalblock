@@ -1,4 +1,3 @@
-import { generateId } from '@minimalblock/core';
 import type { ProductProps, SourceImageEntry } from '@minimalblock/core';
 
 const DEMO_ASSET_BASE = 'https://images.unsplash.com/photo';
@@ -19,21 +18,20 @@ function demoEntry(
 }
 
 export const DEMO_PRODUCT_FAILED: ProductProps = {
-  id: generateId(),
+  id: 'demo-failed-0001-0000-0000-000000000001',
   name: 'Wireless Headphones (Demo — Failed QA)',
   description: 'Over-ear wireless headphones with active noise cancellation and 30-hour battery life.',
   category: 'electronics',
   ownerId: 'demo-seller',
   slug: 'wireless-headphones-demo-failed',
-  // Phase 6 — invalid hotspot demo path: empty label, test label, missing type/description
   hotspots: [
-    { id: generateId(), label: '', type: 'feature', approved: false },
-    { id: generateId(), label: 'test', description: 'test', type: undefined, position: '0.1 0.2 0.3', normal: '0 1 0', approved: false },
-    { id: generateId(), label: 'hotspot', description: 'click here', type: undefined, approved: false },
+    { id: 'demo-hs-0001', label: '', type: 'feature', approved: false },
+    { id: 'demo-hs-0002', label: 'test', description: 'test', type: undefined, position: '0.1 0.2 0.3', normal: '0 1 0', approved: false },
+    { id: 'demo-hs-0003', label: 'hotspot', description: 'click here', type: undefined, approved: false },
   ],
   hotspotsSuggested: [
-    { id: generateId(), title: 'ANC Microphone Array', description: 'Four-microphone setup actively cancels ambient noise for immersive listening.', type: 'feature', status: 'pending' },
-    { id: generateId(), title: 'USB-C Charging Port', description: 'Universal USB-C port supports 30-minute fast-charge for 10 hours of playback.', type: 'feature', status: 'pending' },
+    { id: 'demo-hs-0004', title: 'ANC Microphone Array', description: 'Four-microphone setup actively cancels ambient noise for immersive listening.', type: 'feature', status: 'pending' },
+    { id: 'demo-hs-0005', title: 'USB-C Charging Port', description: 'Universal USB-C port supports 30-minute fast-charge for 10 hours of playback.', type: 'feature', status: 'pending' },
   ],
   workflowStatus: 'failed_qa',
   aiAnalysis: {
@@ -75,16 +73,15 @@ export const DEMO_PRODUCT_FAILED: ProductProps = {
 };
 
 export const DEMO_PRODUCT_SUCCESS: ProductProps = {
-  id: generateId(),
+  id: 'demo-success-0002-0000-0000-000000000002',
   name: 'Leather Tote Bag (Demo — Approved)',
   description: 'Full-grain leather tote bag handcrafted in Italy, with a spacious interior and magnetic closure.',
   category: 'bags',
   ownerId: 'demo-seller',
   slug: 'leather-tote-bag-demo-approved',
-  // Phase 6 — valid hotspot demo path: all hotspots have labels, descriptions, types, positions, and are approved
   hotspots: [
     {
-      id: generateId(),
+      id: 'demo-hs-0010',
       label: 'Full-Grain Italian Leather',
       description: 'Sourced from Tuscan tanneries — develops a rich patina with age and daily use.',
       type: 'material',
@@ -93,7 +90,7 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
       approved: true,
     },
     {
-      id: generateId(),
+      id: 'demo-hs-0011',
       label: 'Solid Brass Hardware',
       description: 'Solid brass D-rings and clasps resist tarnish and outlast the bag itself.',
       type: 'material',
@@ -102,7 +99,7 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
       approved: true,
     },
     {
-      id: generateId(),
+      id: 'demo-hs-0012',
       label: 'Magnetic Closure',
       description: 'Strong neodymium magnet keeps the bag securely shut without slowing you down.',
       type: 'feature',
@@ -111,7 +108,7 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
       approved: true,
     },
     {
-      id: generateId(),
+      id: 'demo-hs-0013',
       label: 'Interior Width — 34 cm',
       description: 'Wide enough for a 13″ laptop, A4 documents, and daily essentials side by side.',
       type: 'dimension',
@@ -121,8 +118,8 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
     },
   ],
   hotspotsSuggested: [
-    { id: generateId(), title: 'Cotton Canvas Lining', description: 'Woven cotton lining protects contents and resists tearing under heavy loads.', type: 'material', status: 'accepted' },
-    { id: generateId(), title: 'Open Slip Pocket', description: 'External slip pocket fits a phone or transit card for quick access.', type: 'feature', status: 'accepted' },
+    { id: 'demo-hs-0014', title: 'Cotton Canvas Lining', description: 'Woven cotton lining protects contents and resists tearing under heavy loads.', type: 'material', status: 'accepted' },
+    { id: 'demo-hs-0015', title: 'Open Slip Pocket', description: 'External slip pocket fits a phone or transit card for quick access.', type: 'feature', status: 'accepted' },
   ],
   workflowStatus: 'approved',
   aiAnalysis: {
@@ -161,16 +158,15 @@ export const DEMO_PRODUCT_SUCCESS: ProductProps = {
 };
 
 export const DEMO_PRODUCT_MANUAL_FALLBACK: ProductProps = {
-  id: generateId(),
+  id: 'demo-manual-0003-0000-0000-000000000003',
   name: 'Ceramic Vase — Manual 3D Fallback (Demo)',
   description: 'Hand-thrown ceramic vase with a matte glaze finish. 3D model uploaded manually as a fallback because AI generation produced unusable geometry.',
   category: 'home-decor',
   ownerId: 'demo-seller',
   slug: 'ceramic-vase-demo-manual-fallback',
-  // Phase 6 — pending-approval demo path: hotspots placed but not yet approved by seller
   hotspots: [
     {
-      id: generateId(),
+      id: 'demo-hs-0020',
       label: 'Matte Glaze Finish',
       description: 'Hand-applied matte glaze fired at 1260 °C — smooth to the touch and dishwasher-safe.',
       type: 'material',
@@ -179,7 +175,7 @@ export const DEMO_PRODUCT_MANUAL_FALLBACK: ProductProps = {
       approved: false,
     },
     {
-      id: generateId(),
+      id: 'demo-hs-0021',
       label: 'Watertight Interior',
       description: 'Non-porous interior suitable for fresh flowers with water or dried arrangements.',
       type: 'feature',
@@ -189,7 +185,7 @@ export const DEMO_PRODUCT_MANUAL_FALLBACK: ProductProps = {
     },
   ],
   hotspotsSuggested: [
-    { id: generateId(), title: 'Artisan Maker Mark', description: 'Hand-incised maker mark on the base identifies the individual potter who threw this piece.', type: 'feature', status: 'pending' },
+    { id: 'demo-hs-0022', title: 'Artisan Maker Mark', description: 'Hand-incised maker mark on the base identifies the individual potter who threw this piece.', type: 'feature', status: 'pending' },
   ],
   workflowStatus: 'ready_for_review',
   aiAnalysis: {
@@ -230,16 +226,15 @@ export const DEMO_PRODUCT_MANUAL_FALLBACK: ProductProps = {
 };
 
 export const DEMO_PRODUCT_WARNING: ProductProps = {
-  id: generateId(),
+  id: 'demo-warning-0004-0000-0000-000000000004',
   name: 'Modern Floor Lamp (Demo — Needs Fix)',
   description: 'Minimalist arc floor lamp with a marble base and adjustable head, suitable for reading and ambient lighting.',
   category: 'home-decor',
   ownerId: 'demo-seller',
   slug: 'modern-floor-lamp-demo-needs-fix',
-  // Phase 6 — mixed quality demo path: one valid hotspot, one with warnings (missing type/description)
   hotspots: [
     {
-      id: generateId(),
+      id: 'demo-hs-0030',
       label: 'Natural Marble Base',
       description: 'Solid Carrara marble base weighs 4 kg — keeps the 180 cm arc stable without wall anchoring.',
       type: 'material',
@@ -248,7 +243,7 @@ export const DEMO_PRODUCT_WARNING: ProductProps = {
       approved: true,
     },
     {
-      id: generateId(),
+      id: 'demo-hs-0031',
       label: 'Adjustable Arc Head',
       description: undefined,
       type: undefined,
@@ -257,7 +252,7 @@ export const DEMO_PRODUCT_WARNING: ProductProps = {
       approved: false,
     },
     {
-      id: generateId(),
+      id: 'demo-hs-0032',
       label: 'E27 Bulb Socket',
       description: 'Compatible with standard E27 bulbs up to 60 W, including Edison-style filament bulbs.',
       type: 'assembly',
@@ -267,8 +262,8 @@ export const DEMO_PRODUCT_WARNING: ProductProps = {
     },
   ],
   hotspotsSuggested: [
-    { id: generateId(), title: 'Fabric Drum Shade', description: 'Linen drum shade diffuses warm light and reduces glare for reading.', type: 'feature', status: 'pending' },
-    { id: generateId(), title: 'Touch-Dimmer Switch', description: 'Inline touch dimmer on the cord provides three brightness levels.', type: 'feature', status: 'rejected' },
+    { id: 'demo-hs-0033', title: 'Fabric Drum Shade', description: 'Linen drum shade diffuses warm light and reduces glare for reading.', type: 'feature', status: 'pending' },
+    { id: 'demo-hs-0034', title: 'Touch-Dimmer Switch', description: 'Inline touch dimmer on the cord provides three brightness levels.', type: 'feature', status: 'rejected' },
   ],
   workflowStatus: 'needs_fix',
   aiAnalysis: {
