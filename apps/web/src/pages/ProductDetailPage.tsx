@@ -216,9 +216,10 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
 
   useEffect(() => {
     if (!conversion || conversion.status.isTerminal()) return;
+    const conversionId = conversion.id;
     const interval = window.setInterval(async () => {
       try {
-        const response = await apiClient.getConversion(conversion.id);
+        const response = await apiClient.getConversion(conversionId);
         setConversion(hydrateConversion(response.conversion));
       } catch {
         window.clearInterval(interval);
@@ -226,7 +227,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
     }, 2500);
 
     return () => window.clearInterval(interval);
-  }, [apiClient, conversion]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiClient, conversion?.id, conversion?.status.value]);
 
   const productName = product?.name ?? conversion?.sourceAsset.storageKey.split('/').pop() ?? 'Product';
   const visibleHotspots = useMemo(() => hotspots.filter((hotspot) => hotspot.position && hotspot.normal), [hotspots]);
