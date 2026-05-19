@@ -6,16 +6,17 @@ import {
 import {
   ANALYSIS_MODEL_ID,
   DEFAULT_MODEL_ID,
-  GeminiImageClassifier,
+  GeminiProductIntelligenceAgent,
   GeminiMaterialInferenceEngine,
   GeminiProductClusterAnalyzer,
+  ImageDeduplicationService,
   createGenerativeModel,
 } from '@minimalblock/ai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@minimalblock/data';
 import { ScraperAdapterRegistry } from './adapters/adapter-registry.js';
 import { ImageUploadPipeline } from './pipeline/image-upload.pipeline.js';
-import { ImageIntelligencePipeline } from './pipeline/image-intelligence.pipeline.js';
+import { ProductIntelligencePipeline } from './pipeline/product-intelligence.pipeline.js';
 import { AutofillPipeline, inferCategory, cleanTitle, cleanText } from './pipeline/autofill.pipeline.js';
 import { ClusterDetectionPipeline } from './pipeline/cluster.pipeline.js';
 import { MaterialInferencePipeline } from './pipeline/material.pipeline.js';
@@ -68,7 +69,7 @@ function buildField<T>(
 export class ExtractionOrchestrator {
   private readonly registry: ScraperAdapterRegistry;
   private readonly uploadPipeline: ImageUploadPipeline;
-  private readonly intelligencePipeline: ImageIntelligencePipeline;
+  private readonly intelligencePipeline: ProductIntelligencePipeline;
   private readonly autofillPipeline: AutofillPipeline;
   private readonly clusterPipeline: ClusterDetectionPipeline;
   private readonly materialPipeline: MaterialInferencePipeline;
@@ -79,7 +80,10 @@ export class ExtractionOrchestrator {
 
     this.registry = new ScraperAdapterRegistry();
     this.uploadPipeline = new ImageUploadPipeline(options.admin, options.ownerId);
-    this.intelligencePipeline = new ImageIntelligencePipeline(new GeminiImageClassifier(flashModel));
+    this.intelligencePipeline = new ProductIntelligencePipeline(
+      new GeminiProductIntelligenceAgent(flashModel),
+      new ImageDeduplicationService(),
+    );
     this.autofillPipeline = new AutofillPipeline(analysisModel);
     this.clusterPipeline = new ClusterDetectionPipeline(new GeminiProductClusterAnalyzer(flashModel));
     this.materialPipeline = new MaterialInferencePipeline(new GeminiMaterialInferenceEngine(flashModel));
@@ -95,7 +99,7 @@ export class ExtractionOrchestrator {
     const uploadedImages = await this.uploadPipeline.upload(scrape.images);
 
     // 3. Image intelligence — classify, deduplicate, score (graceful fallback)
-    let imageIntelligenceResult: Awaited<ReturnType<ImageIntelligencePipeline['analyze']>> = {
+    let imageIntelligenceResult: Awaited<ReturnType<ProductIntelligencePipeline['analyze']>> = {
       candidates: uploadedImages,
       summary: undefined,
     };

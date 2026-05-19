@@ -50,6 +50,9 @@ export interface ImportedImageCandidate {
   perceptualHash?: string;
   variantKey?: string;
   viewAngle?: ImageViewAngle;
+  // APIA — per-image semantic intelligence
+  informationValue?: 'high' | 'medium' | 'low';
+  geometricContribution?: 'primary' | 'secondary' | 'none';
 }
 
 export interface ProductVariantGroup {
@@ -118,6 +121,14 @@ export interface ProductImportData {
     rejectedByAi: number;
     duplicatesRemoved: number;
     variantImagesDetected: number;
+    // APIA — dataset-level semantic intelligence
+    datasetCoherence?: 'high' | 'medium' | 'low';
+    reconstructionReadiness?: 'ready' | 'degraded' | 'blocked';
+    reconstructionBlockReason?: string;
+    productIdentityScore?: number;
+    uncertaintyLevel?: 'low' | 'medium' | 'high';
+    perspectiveDiversity?: 'excellent' | 'adequate' | 'limited';
+    intelligenceNotes?: string[];
   };
   // APUS — material and geometry inference
   inferredMaterialFinish?: MaterialFinish;
