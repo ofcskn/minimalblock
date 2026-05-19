@@ -31,6 +31,7 @@ export type Database = {
           workflow_status: string;
           input_method: string;
           import_data: Json | null;
+          brand_placement: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -48,6 +49,7 @@ export type Database = {
           workflow_status?: string;
           input_method?: string;
           import_data?: Json | null;
+          brand_placement?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -65,6 +67,7 @@ export type Database = {
           workflow_status?: string;
           input_method?: string;
           import_data?: Json | null;
+          brand_placement?: Json | null;
           created_at?: string;
           updated_at?: string;
         };

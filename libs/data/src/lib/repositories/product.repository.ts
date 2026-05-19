@@ -5,6 +5,7 @@ import {
   ProductAiAnalysis,
   ProductImportData,
   SuggestedHotspot,
+  BrandPlacementConfig,
   migrateLegacyProductCategory,
 } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -31,6 +32,9 @@ function rowToProduct(row: ProductRow): Product {
     inputMethod: row.input_method as Product['inputMethod'],
     importData: row.import_data && !Array.isArray(row.import_data)
       ? (row.import_data as unknown as ProductImportData)
+      : null,
+    brandPlacement: row.brand_placement && !Array.isArray(row.brand_placement)
+      ? (row.brand_placement as unknown as BrandPlacementConfig)
       : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
@@ -81,6 +85,9 @@ export class SupabaseProductRepository implements IProductRepository {
         input_method: product.inputMethod,
         import_data: product.importData
           ? product.importData as unknown as import('../supabase/database.types.js').Json
+          : null,
+        brand_placement: product.brandPlacement
+          ? product.brandPlacement as unknown as import('../supabase/database.types.js').Json
           : null,
       })
       .select()

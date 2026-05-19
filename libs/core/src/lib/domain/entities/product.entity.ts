@@ -211,6 +211,54 @@ export interface ProductAiAnalysis {
   sourceImageEntries?: SourceImageEntry[];
 }
 
+export type BrandPlacementKey = 'logo' | 'colors' | 'text' | 'typography' | 'watermark' | 'packaging' | 'slogan' | 'socialTags';
+
+export interface BrandPlacementConfig {
+  enabled: boolean;
+  logo: boolean;
+  colors: boolean;
+  text: boolean;
+  typography: boolean;
+  watermark: boolean;
+  packaging: boolean;
+  slogan: boolean;
+  socialTags: boolean;
+}
+
+export const BRAND_PLACEMENT_KEYS: BrandPlacementKey[] = [
+  'logo', 'colors', 'text', 'typography', 'watermark', 'packaging', 'slogan', 'socialTags',
+];
+
+export const DEFAULT_BRAND_PLACEMENT: BrandPlacementConfig = {
+  enabled: false,
+  logo: false,
+  colors: false,
+  text: false,
+  typography: false,
+  watermark: false,
+  packaging: false,
+  slogan: false,
+  socialTags: false,
+};
+
+export function buildBrandPlacementPrompt(config: BrandPlacementConfig): string {
+  if (!config.enabled) return '';
+  const enabled: string[] = [];
+  const disabled: string[] = [];
+  if (config.logo) enabled.push('brand logo'); else disabled.push('brand logo');
+  if (config.colors) enabled.push('brand colors'); else disabled.push('brand colors');
+  if (config.text) enabled.push('brand text'); else disabled.push('brand text');
+  if (config.typography) enabled.push('typography/fonts'); else disabled.push('typography/fonts');
+  if (config.watermark) enabled.push('subtle watermark styling'); else disabled.push('watermark');
+  if (config.packaging) enabled.push('packaging elements'); else disabled.push('packaging elements');
+  if (config.slogan) enabled.push('brand slogan'); else disabled.push('brand slogan');
+  if (config.socialTags) enabled.push('social media tags'); else disabled.push('social media tags');
+  const parts: string[] = [];
+  if (enabled.length > 0) parts.push(`Use: ${enabled.join(', ')}.`);
+  if (disabled.length > 0) parts.push(`Do not include: ${disabled.join(', ')}.`);
+  return parts.join(' ');
+}
+
 export interface ProductProps {
   id: string;
   name: string;
@@ -224,6 +272,7 @@ export interface ProductProps {
   workflowStatus?: ProductWorkflowStatusValue;
   inputMethod?: ProductInputMethod;
   importData?: ProductImportData | null;
+  brandPlacement?: BrandPlacementConfig | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -241,6 +290,7 @@ export class Product {
   readonly workflowStatus: ProductWorkflowStatusValue;
   readonly inputMethod: ProductInputMethod;
   readonly importData: ProductImportData | null;
+  readonly brandPlacement: BrandPlacementConfig | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
@@ -257,6 +307,7 @@ export class Product {
     this.workflowStatus = props.workflowStatus ?? 'draft';
     this.inputMethod = props.inputMethod ?? 'manual_upload';
     this.importData = props.importData ?? null;
+    this.brandPlacement = props.brandPlacement ?? null;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
@@ -412,6 +463,10 @@ export class Product {
 
   withAiAnalysis(aiAnalysis: ProductAiAnalysis | null): Product {
     return new Product({ ...this, aiAnalysis, updatedAt: new Date() });
+  }
+
+  withBrandPlacement(brandPlacement: BrandPlacementConfig | null): Product {
+    return new Product({ ...this, brandPlacement, updatedAt: new Date() });
   }
 
   withSuggestedHotspots(hotspotsSuggested: SuggestedHotspot[]): Product {
