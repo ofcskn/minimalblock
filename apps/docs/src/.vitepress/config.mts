@@ -2,6 +2,10 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   srcDir: '../../../docs',
+  head: [
+    ['meta', { name: 'robots', content: 'noindex, nofollow, noarchive, noimageindex' }],
+    ['meta', { name: 'googlebot', content: 'noindex, nofollow' }],
+  ],
 
   locales: {
     en: {
