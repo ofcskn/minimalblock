@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Conversion } from '@minimalblock/core';
-import type { IConversionRepository, IProductRepository } from '@minimalblock/core';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Conversion, IConversionRepository, IProductRepository } from '@minimalblock/core';
 
 export interface UseGalleryState {
   conversions: Conversion[];
@@ -13,29 +12,29 @@ export function useGallery(
   productRepo: IProductRepository,
   ownerId: string,
 ) {
-  const [state, setState] = useState<UseGalleryState>({ conversions: [], loading: true, error: null });
-  const conversionsRef = useRef<Conversion[]>([]);
+  const queryClient = useQueryClient();
+  const queryKey = ['gallery', ownerId] as const;
 
-  useEffect(() => {
-    let cancelled = false;
+  const { data: conversions = [], isPending, error } = useQuery({
+    queryKey,
+    queryFn: () => conversionRepo.findByOwnerId(ownerId),
+    staleTime: 30_000,
+    enabled: !!ownerId,
+  });
 
-    conversionRepo.findByOwnerId(ownerId).then(conversions => {
-      if (cancelled) return;
-      conversionsRef.current = conversions;
-      setState({ conversions, loading: false, error: null });
-    }).catch(err => {
-      if (!cancelled) setState({ conversions: [], loading: false, error: err instanceof Error ? err.message : 'Failed to load' });
-    });
+  const { mutateAsync: removeProduct } = useMutation({
+    mutationFn: (productId: string) => productRepo.delete(productId),
+    onSuccess: (_result, productId) => {
+      queryClient.setQueryData<Conversion[]>(queryKey, (old) =>
+        old ? old.filter((c) => c.productId !== productId) : [],
+      );
+    },
+  });
 
-    return () => { cancelled = true; };
-  }, [conversionRepo, ownerId]);
-
-  const removeProduct = async (productId: string) => {
-    await productRepo.delete(productId);
-    const updated = conversionsRef.current.filter(c => c.productId !== productId);
-    conversionsRef.current = updated;
-    setState(s => ({ ...s, conversions: updated }));
+  return {
+    conversions,
+    loading: isPending,
+    error: error ? (error instanceof Error ? error.message : 'Failed to load') : null,
+    removeProduct,
   };
-
-  return { ...state, removeProduct };
 }

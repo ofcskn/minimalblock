@@ -14,6 +14,8 @@ export interface ModelViewerProps {
   hotspots?: Hotspot[];
   editMode?: boolean;
   failedQa?: boolean;
+  /** Defer WebGL canvas creation until the element scrolls into view. */
+  lazy?: boolean;
   onLoad?: () => void;
   onError?: () => void;
   onArOpen?: () => void;
@@ -40,6 +42,7 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
     hotspots = [],
     editMode = false,
     failedQa = false,
+    lazy = false,
     onLoad,
     onError,
     onArOpen,
@@ -51,9 +54,23 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
   ref,
 ) {
   const elRef = useRef<ModelViewerElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const sessionStart = useRef<number>(0);
   const onSessionEndRef = useRef(onSessionEnd);
   const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [inView, setInView] = useState(!lazy);
+
+  useEffect(() => {
+    if (!lazy) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect(); } },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [lazy]);
 
   useEffect(() => { onSessionEndRef.current = onSessionEnd; }, [onSessionEnd]);
 
@@ -131,108 +148,106 @@ export const ModelViewer = forwardRef<ModelViewerHandle, ModelViewerProps>(funct
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {/* @ts-expect-error — model-viewer is a custom element registered by the CDN script */}
-      <model-viewer
-        ref={elRef}
-        src={modelUrl}
-        camera-controls
-        auto-rotate={autoRotate ? '' : undefined}
-        shadow-intensity="1"
-        ar
-        ar-modes="webxr scene-viewer"
-        ar-scale="auto"
-        style={{ width: '100%', height: '100%', cursor: editMode ? 'crosshair' : 'grab' }}
-        class={className}
-        onClick={handleClick}
-      >
-        {hotspots.filter((hs) => hs.position && hs.normal).map((hs) => (
-          <button
-            key={hs.id}
-            slot={`hotspot-${hs.id}`}
-            data-position={hs.position}
-            data-normal={hs.normal}
-            onClick={(e) => { e.stopPropagation(); onHotspotClick?.(hs.id); }}
-            style={{
-              display: 'block',
-              width: '24px',
-              height: '24px',
-              borderRadius: '50%',
-              border: '2px solid white',
-              backgroundColor: 'rgba(79,70,229,0.9)',
-              cursor: 'pointer',
-              position: 'relative',
-            }}
-            title={hs.label}
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {inView && (
+        <>
+          {/* @ts-expect-error — model-viewer is a custom element registered by the CDN script */}
+          <model-viewer
+            ref={elRef}
+            src={modelUrl}
+            camera-controls
+            auto-rotate={autoRotate ? '' : undefined}
+            shadow-intensity="1"
+            ar
+            ar-modes="webxr scene-viewer"
+            ar-scale="auto"
+            style={{ width: '100%', height: '100%', cursor: editMode ? 'crosshair' : 'grab' }}
+            class={className}
+            onClick={handleClick}
           >
-            <span style={{
-              position: 'absolute',
-              left: '50%',
-              bottom: '28px',
-              transform: 'translateX(-50%)',
-              backgroundColor: 'rgba(0,0,0,0.75)',
-              color: 'white',
-              fontSize: '11px',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              whiteSpace: 'nowrap',
-              pointerEvents: 'none',
+            {hotspots.filter((hs) => hs.position && hs.normal).map((hs) => (
+              <button
+                key={hs.id}
+                slot={`hotspot-${hs.id}`}
+                data-position={hs.position}
+                data-normal={hs.normal}
+                onClick={(e) => { e.stopPropagation(); onHotspotClick?.(hs.id); }}
+                style={{
+                  display: 'block',
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid white',
+                  backgroundColor: 'rgba(79,70,229,0.9)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                }}
+                title={hs.label}
+              >
+                <span style={{
+                  position: 'absolute',
+                  left: '50%',
+                  bottom: '28px',
+                  transform: 'translateX(-50%)',
+                  backgroundColor: 'rgba(0,0,0,0.75)',
+                  color: 'white',
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                }}>
+                  {hs.label}
+                </span>
+              </button>
+            ))}
+          {/* @ts-expect-error custom element closing tag for model-viewer */}
+          </model-viewer>
+
+          {loadState === 'loading' && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(249,250,251,0.85)', gap: '12px',
             }}>
-              {hs.label}
-            </span>
-          </button>
-        ))}
-      {/* @ts-expect-error custom element closing tag for model-viewer */}
-      </model-viewer>
+              <svg style={{ width: 32, height: 32, animation: 'spin 1s linear infinite', color: '#6366f1' }} viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              <span style={{ fontSize: '13px', color: '#6b7280' }}>Loading 3D model…</span>
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </div>
+          )}
 
-      {/* E.5 — Loading overlay */}
-      {loadState === 'loading' && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(249,250,251,0.85)', gap: '12px',
-        }}>
-          <svg style={{ width: 32, height: 32, animation: 'spin 1s linear infinite', color: '#6366f1' }} viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
-            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-          </svg>
-          <span style={{ fontSize: '13px', color: '#6b7280' }}>Loading 3D model…</span>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-      )}
+          {loadState === 'error' && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(255,241,242,0.95)', gap: '10px',
+            }}>
+              <svg style={{ width: 40, height: 40, color: '#dc2626' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <p style={{ fontSize: '14px', fontWeight: 600, color: '#991b1b' }}>Failed to load 3D model</p>
+              <p style={{ fontSize: '12px', color: '#b91c1c', textAlign: 'center', maxWidth: '220px' }}>
+                The GLB file could not be rendered. Try uploading a different model or use the manual fallback.
+              </p>
+            </div>
+          )}
 
-      {/* E.6 — Failed-load overlay */}
-      {loadState === 'error' && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(255,241,242,0.95)', gap: '10px',
-        }}>
-          <svg style={{ width: 40, height: 40, color: '#dc2626' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-          <p style={{ fontSize: '14px', fontWeight: 600, color: '#991b1b' }}>Failed to load 3D model</p>
-          <p style={{ fontSize: '12px', color: '#b91c1c', textAlign: 'center', maxWidth: '220px' }}>
-            The GLB file could not be rendered. Try uploading a different model or use the manual fallback.
-          </p>
-        </div>
-      )}
+          {loadState === 'ready' && !failedQa && <ModelReadyBadge />}
 
-      {/* E.8 — Model-ready badge (fades after 3 s) */}
-      {loadState === 'ready' && !failedQa && (
-        <ModelReadyBadge />
-      )}
-
-      {/* E.9 — Model-failed-QA overlay badge */}
-      {loadState === 'ready' && failedQa && (
-        <div style={{
-          position: 'absolute', top: 10, left: 10,
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: 'rgba(220,38,38,0.92)', color: 'white',
-          borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600,
-        }}>
-          <span>⚠</span> Visual QA Failed — publishing blocked
-        </div>
+          {loadState === 'ready' && failedQa && (
+            <div style={{
+              position: 'absolute', top: 10, left: 10,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(220,38,38,0.92)', color: 'white',
+              borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600,
+            }}>
+              <span>⚠</span> Visual QA Failed — publishing blocked
+            </div>
+          )}
+        </>
       )}
     </div>
   );

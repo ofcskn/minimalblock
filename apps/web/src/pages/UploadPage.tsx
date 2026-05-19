@@ -315,7 +315,7 @@ export function UploadPage({ user }: UploadPageProps) {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {sortedSourceAssets.map((asset) => (
                   <div key={asset.storageKey} className="group relative overflow-hidden rounded-xl border border-gray-200">
-                    <img src={asset.url} alt="" className="h-48 w-full object-cover" />
+                    <img src={asset.url} alt="" loading="lazy" decoding="async" className="h-48 w-full object-cover" />
                     <button
                       onClick={() => setSourceAssets((p) => p.filter((a) => a.storageKey !== asset.storageKey))}
                       className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white/80 text-gray-600 opacity-0 shadow transition-opacity hover:bg-white group-hover:opacity-100"
@@ -458,7 +458,7 @@ export function UploadPage({ user }: UploadPageProps) {
             <div className="mb-3 flex gap-2 overflow-x-auto">
               {mode === '3d' ? sortedSourceAssets.map((asset) => (
                 <div key={asset.storageKey} className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-200">
-                  <img src={asset.url} alt="" className="h-full w-full object-cover" />
+                  <img src={asset.url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   <button
                     onClick={() => setSourceAssets((p) => p.filter((a) => a.storageKey !== asset.storageKey))}
                     className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"

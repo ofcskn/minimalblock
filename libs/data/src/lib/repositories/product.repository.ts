@@ -61,7 +61,8 @@ export class SupabaseProductRepository implements IProductRepository {
       .from('products')
       .select('*')
       .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500);
     return (data ?? []).map(rowToProduct);
   }
 

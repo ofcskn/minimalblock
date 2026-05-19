@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useId, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { cn } from '../utils/cn.js';
 import type {
   HeaderActionItem,
@@ -242,7 +242,7 @@ export function HeaderRoot({
   sticky?: boolean;
   theme?: HeaderTheme;
 }) {
-  const themeClasses = getThemeClasses(theme);
+  const themeClasses = useMemo(() => getThemeClasses(theme), [theme]);
 
   return (
     <header

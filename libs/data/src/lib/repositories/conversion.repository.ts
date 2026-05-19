@@ -116,7 +116,8 @@ export class SupabaseConversionRepository implements IConversionRepository {
       .from('conversions')
       .select('*')
       .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(200);
     const rows = data ?? [];
     const sources = await this.hydrateSources(rows.map((r) => r.id));
     return rows.map((r) => rowToConversion(r, sources.get(r.id) ?? []));

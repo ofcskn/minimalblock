@@ -18,30 +18,14 @@ export class SupabaseEmbedViewsRepository {
   }
 
   async getDomainsForOwner(ownerId: string): Promise<EmbedDomainStat[]> {
-    const { data: products } = await this.client
-      .from('products')
-      .select('id')
-      .eq('owner_id', ownerId);
-
-    if (!products || products.length === 0) return [];
-
-    const productIds = products.map(p => p.id);
-    const { data } = await this.client
-      .from('embed_views')
-      .select('domain')
-      .in('product_id', productIds)
-      .not('domain', 'is', null);
-
+    const { data } = await this.client.rpc('get_embed_domains_for_owner', {
+      p_owner_id: ownerId,
+      p_limit: 10,
+    });
     if (!data) return [];
-
-    const counts: Record<string, number> = {};
-    for (const row of data) {
-      if (row.domain) counts[row.domain] = (counts[row.domain] ?? 0) + 1;
-    }
-
-    return Object.entries(counts)
-      .map(([domain, count]) => ({ domain, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+    return (data as { domain: string; view_count: number }[]).map(({ domain, view_count }) => ({
+      domain,
+      count: view_count,
+    }));
   }
 }
