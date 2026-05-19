@@ -1087,7 +1087,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
                               />
                               <div className="min-w-0 flex-1">
                                 {candidate.url ? (
-                                  <img src={candidate.url} alt={candidate.title ?? candidate.sourceUrl} className="h-24 w-full rounded-lg border border-gray-200 object-cover" />
+                                  <img src={candidate.url} alt={candidate.title ?? candidate.sourceUrl} loading="lazy" decoding="async" className="h-24 w-full rounded-lg border border-gray-200 object-cover" />
                                 ) : (
                                   <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-100 text-xs text-gray-500">Image failed</div>
                                 )}
@@ -1190,7 +1190,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
               <div className="grid gap-3 sm:grid-cols-2">
                 {sourceAssetsForReview.map((asset) => (
                   <div key={asset.storageKey} className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
-                    <img src={asset.url} alt={asset.storageKey} className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
+                    <img src={asset.url} alt={asset.storageKey} loading="lazy" decoding="async" className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-gray-900">{asset.storageKey.split('/').pop()}</p>
                       <p className="text-xs text-gray-400">{(asset.sizeBytes / 1024).toFixed(1)} KB</p>

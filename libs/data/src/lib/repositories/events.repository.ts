@@ -66,18 +66,13 @@ export class SupabaseEventsRepository {
   }
 
   async getStatsForOwner(ownerId: string): Promise<ProductStats[]> {
-    const { data } = await this.client
-      .from('events')
-      .select('product_id, event_type')
-      .eq('owner_id', ownerId);
-
+    const { data } = await this.client.rpc('get_stats_for_owner', { p_owner_id: ownerId });
     if (!data) return [];
 
     const map = new Map<string, Record<string, number>>();
-    for (const row of data) {
+    for (const row of data as { product_id: string; event_type: string; event_count: number }[]) {
       if (!map.has(row.product_id)) map.set(row.product_id, {});
-      const counts = map.get(row.product_id)!;
-      counts[row.event_type] = (counts[row.event_type] ?? 0) + 1;
+      map.get(row.product_id)![row.event_type] = row.event_count;
     }
 
     return Array.from(map.entries()).map(([productId, counts]) => ({
@@ -88,20 +83,13 @@ export class SupabaseEventsRepository {
   }
 
   async getHotspotStatsForOwner(ownerId: string): Promise<Record<string, HotspotStat[]>> {
-    const { data } = await this.client
-      .from('events')
-      .select('product_id, metadata')
-      .eq('owner_id', ownerId)
-      .eq('event_type', 'hotspot_clicked');
-
+    const { data } = await this.client.rpc('get_hotspot_stats_for_owner', { p_owner_id: ownerId });
     if (!data) return {};
 
     const byProduct: Record<string, Record<string, number>> = {};
-    for (const row of data) {
-      const label = (row.metadata as Record<string, string> | null)?.hotspot_label;
-      if (!label) continue;
+    for (const row of data as { product_id: string; hotspot_label: string; click_count: number }[]) {
       if (!byProduct[row.product_id]) byProduct[row.product_id] = {};
-      byProduct[row.product_id][label] = (byProduct[row.product_id][label] ?? 0) + 1;
+      byProduct[row.product_id][row.hotspot_label] = row.click_count;
     }
 
     const result: Record<string, HotspotStat[]> = {};
@@ -114,25 +102,12 @@ export class SupabaseEventsRepository {
   }
 
   async getAvgSessionDuration(ownerId: string): Promise<Record<string, number>> {
-    const { data } = await this.client
-      .from('events')
-      .select('product_id, metadata')
-      .eq('owner_id', ownerId)
-      .eq('event_type', 'session_ended');
-
+    const { data } = await this.client.rpc('get_avg_session_duration', { p_owner_id: ownerId });
     if (!data) return {};
 
-    const totals: Record<string, { sum: number; count: number }> = {};
-    for (const row of data) {
-      const ms = (row.metadata as Record<string, number> | null)?.duration_ms;
-      if (!ms) continue;
-      if (!totals[row.product_id]) totals[row.product_id] = { sum: 0, count: 0 };
-      totals[row.product_id].sum += ms;
-      totals[row.product_id].count += 1;
-    }
-
     return Object.fromEntries(
-      Object.entries(totals).map(([pid, { sum, count }]) => [pid, Math.round(sum / count)])
+      (data as { product_id: string; avg_duration_ms: number }[])
+        .map(({ product_id, avg_duration_ms }) => [product_id, avg_duration_ms]),
     );
   }
 }
