@@ -1,0 +1,96 @@
+name: Bug Report
+description: Report a reproducible bug or unexpected behavior
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug. Please fill out all sections — incomplete reports are hard to act on.
+
+        **Security vulnerabilities must not be reported here.** Email ofcskn1@gmail.com instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I upload a JPEG product photo, the conversion status never changes from "processing"...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to reproduce the behavior.
+      placeholder: |
+        1. Go to the Upload page
+        2. Select a JPEG file (< 2 MB)
+        3. Click "Generate 3D Model"
+        4. Observe conversion status stuck on "processing"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened. Include error messages or screenshots if available.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - "Web app (apps/web)"
+        - "API / Cloudflare Worker (apps/api)"
+        - "Supabase / database"
+        - "AI / Gemini integration (libs/ai)"
+        - "Documentation site (apps/docs)"
+        - "Build / CI"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Fill in the relevant details for your environment.
+      value: |
+        - OS:
+        - Node.js version:
+        - pnpm version:
+        - Browser (if frontend):
+        - Commit / branch:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: Paste relevant console output, Worker logs, or Supabase error messages.
+      render: shell
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I checked the README troubleshooting section
+          required: true
+        - label: This is not a security vulnerability (those must be emailed privately)
+          required: true
