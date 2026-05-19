@@ -37,35 +37,15 @@
       }
     },
     "build:worker": {
-      "executor": "@nx/esbuild:esbuild",
-      "outputs": ["{options.outputPath}"],
-      "defaultConfiguration": "production",
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/api/worker.js"],
+      "dependsOn": ["^build"],
       "options": {
-        "platform": "browser",
-        "outputPath": "dist/apps/api",
-        "format": ["esm"],
-        "bundle": true,
-        "main": "apps/api/src/worker.ts",
-        "tsConfig": "apps/api/tsconfig.app.json",
-        "assets": ["apps/api/src/assets"],
-        "esbuildOptions": {
-          "sourcemap": false,
-          "outExtension": {
-            ".js": ".js"
-          },
-          "conditions": ["worker", "browser", "import", "default"]
-        }
+        "command": "node apps/api/build-worker.mjs"
       },
       "configurations": {
         "development": {
-          "esbuildOptions": {
-            "sourcemap": true
-          }
-        },
-        "production": {
-          "esbuildOptions": {
-            "sourcemap": false
-          }
+          "command": "node apps/api/build-worker.mjs --dev"
         }
       }
     },
