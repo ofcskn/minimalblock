@@ -13,6 +13,7 @@ import {
   QualityReport,
   SourceImageReadiness,
   generateId,
+  type BrandPlacementConfig,
   type ConversionSnapshot,
   type Hotspot,
   type Product,
@@ -20,7 +21,7 @@ import {
   type ProductCluster,
 } from '@minimalblock/core';
 import { MultiProductClusterSelector } from '../components/import/MultiProductClusterSelector.js';
-import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, HotspotEditorPanel, type ModelViewerHandle } from '@minimalblock/ui';
+import { ModelViewer, ModelViewerPlaceholder, ModelInfoCard, StatusBadge, WorkflowStatusBadge, Button, Spinner, Card, Modal, AiDiagnosisPanel, SourceImageReadinessCard, HotspotEditorPanel, BrandPlacementPanel, type ModelViewerHandle } from '@minimalblock/ui';
 import { useApp } from '../context/AppContext.js';
 import type { SupabaseUser } from '../types.js';
 
@@ -147,6 +148,8 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
   const [approvingProduct, setApprovingProduct] = useState(false);
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
   const [diagnosisError, setDiagnosisError] = useState<string | null>(null);
+  const [brandPlacement, setBrandPlacement] = useState<BrandPlacementConfig | null>(null);
+  const [savingBrandPlacement, setSavingBrandPlacement] = useState(false);
   const [importForm, setImportForm] = useState({
     title: '',
     description: '',
@@ -187,6 +190,7 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       setConversion(foundConversion);
       setProduct(foundProduct);
       setHotspots(foundProduct.hotspots);
+      setBrandPlacement(foundProduct.brandPlacement ?? null);
       setMetaForm({
         name: foundProduct.name,
         description: foundProduct.description,
@@ -242,6 +246,18 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
       setEditingMeta(false);
     } finally {
       setSavingMeta(false);
+    }
+  }
+
+  async function saveBrandPlacement(config: BrandPlacementConfig) {
+    if (!product) return;
+    setSavingBrandPlacement(true);
+    try {
+      const saved = await productRepo.save(product.withBrandPlacement(config));
+      setProduct(saved);
+      setBrandPlacement(config);
+    } finally {
+      setSavingBrandPlacement(false);
     }
   }
 
@@ -1309,6 +1325,30 @@ export function ProductDetailPage({ user }: ProductDetailPageProps) {
             readiness={sourceImageReadiness}
             onUploadMissingViews={() => navigate('/upload')}
             onContinueAnyway={() => navigate('/upload')}
+          />
+
+          <BrandPlacementPanel
+            value={brandPlacement}
+            onChange={setBrandPlacement}
+            onSave={saveBrandPlacement}
+            isSaving={savingBrandPlacement}
+            labels={{
+              title: t('brandPlacement.title'),
+              master: t('brandPlacement.master'),
+              assetsSection: t('brandPlacement.assetsSection'),
+              description: t('brandPlacement.description'),
+              save: t('brandPlacement.save'),
+              options: {
+                logo: t('brandPlacement.logo'),
+                colors: t('brandPlacement.colors'),
+                text: t('brandPlacement.text'),
+                typography: t('brandPlacement.typography'),
+                watermark: t('brandPlacement.watermark'),
+                packaging: t('brandPlacement.packaging'),
+                slogan: t('brandPlacement.slogan'),
+                socialTags: t('brandPlacement.socialTags'),
+              },
+            }}
           />
 
           <Card>
