@@ -1077,6 +1077,145 @@ async function handleTrendyolUpdateOrderStatus(
   return { ok: true };
 }
 
+// --- Brand scraping ---
+
+interface BrandScrapeResult {
+  name: string;
+  description: string;
+  logoUrl: string | null;
+  colors: string[];
+  website: string;
+}
+
+function resolveHref(href: string, base: string): string | null {
+  try {
+    return new URL(href, base).toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHex(color: string): string | null {
+  const c = color.trim();
+  if (/^#[0-9a-f]{6}$/i.test(c)) return c.toUpperCase();
+  if (/^#[0-9a-f]{3}$/i.test(c)) {
+    return ('#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]).toUpperCase();
+  }
+  const m = c.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    return (
+      '#' +
+      [m[1], m[2], m[3]].map((n) => parseInt(n).toString(16).padStart(2, '0')).join('')
+    ).toUpperCase();
+  }
+  return null;
+}
+
+function metaContent(html: string, nameOrProperty: string): string {
+  const re = new RegExp(
+    `<meta[^>]+(?:name|property)\\s*=\\s*["']${nameOrProperty.replace('.', '\\.')}["'][^>]*content\\s*=\\s*["']([^"']*?)["']|` +
+    `<meta[^>]+content\\s*=\\s*["']([^"']*?)["'][^>]*(?:name|property)\\s*=\\s*["']${nameOrProperty.replace('.', '\\.')}["']`,
+    'i',
+  );
+  const m = html.match(re);
+  return m ? (m[1] ?? m[2] ?? '') : '';
+}
+
+async function scrapeBrandFromUrl(url: string): Promise<BrandScrapeResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MinimalBlock/1.0)',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw new Error(err instanceof Error && err.name === 'AbortError' ? 'Request timed out' : 'Failed to fetch URL');
+  }
+  clearTimeout(timeoutId);
+
+  if (!response.ok) throw new Error(`Website returned ${response.status}`);
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('html')) throw new Error('URL does not return HTML');
+
+  // Read first 200 KB — enough for <head> on any real site
+  const reader = response.body?.getReader();
+  let html = '';
+  if (reader) {
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    while (bytesRead < 200_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      bytesRead += value.byteLength;
+    }
+    reader.cancel();
+  }
+
+  const head = html.slice(0, html.toLowerCase().indexOf('</head>') + 1) || html.slice(0, 20_000);
+
+  const titleMatch = head.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const rawTitle = titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&#?\w+;/g, '') : '';
+
+  const ogSiteName = metaContent(head, 'og:site_name');
+  const ogTitle = metaContent(head, 'og:title');
+  const ogDescription = metaContent(head, 'og:description');
+  const metaDescription = metaContent(head, 'description');
+  const themeColor = metaContent(head, 'theme-color');
+  const tileColor = metaContent(head, 'msapplication-TileColor');
+
+  // Collect all icon hrefs from <link rel="...icon...">
+  const linkIconRe = /<link[^>]+>/gi;
+  const iconHrefs: string[] = [];
+  let linkMatch: RegExpExecArray | null;
+  while ((linkMatch = linkIconRe.exec(head)) !== null) {
+    const tag = linkMatch[0];
+    const relMatch = tag.match(/rel\s*=\s*["']([^"']*?)["']/i);
+    if (!relMatch) continue;
+    const rel = relMatch[1].toLowerCase();
+    if (!rel.includes('icon') && !rel.includes('apple-touch-icon')) continue;
+    const hrefMatch = tag.match(/href\s*=\s*["']([^"']*?)["']/i);
+    if (hrefMatch) iconHrefs.push(hrefMatch[1]);
+  }
+
+  const baseUrl = new URL(url);
+  const brandName = (ogSiteName || ogTitle || rawTitle || baseUrl.hostname.replace(/^www\./, '')).trim().slice(0, 200);
+  const description = (ogDescription || metaDescription || '').trim().slice(0, 2000);
+
+  const bestIcon =
+    iconHrefs.find((h) => /\.svg(\?|$)/i.test(h)) ||
+    iconHrefs.find((h) => /\.png(\?|$)/i.test(h)) ||
+    iconHrefs[0];
+  const logoUrl = resolveHref(bestIcon ?? '/favicon.ico', url);
+
+  const rawColors = [themeColor, tileColor].filter(Boolean);
+  const colors = rawColors.map(normalizeHex).filter((c): c is string => c !== null);
+
+  return { name: brandName, description, logoUrl, colors, website: baseUrl.origin };
+}
+
+async function handleBrandScrape(_ctx: RequestContext, req: { url?: string }): Promise<BrandScrapeResult> {
+  if (!req.url?.trim()) throw new Error('Invalid request');
+  let targetUrl: string;
+  try {
+    const raw = req.url.startsWith('http') ? req.url : `https://${req.url}`;
+    targetUrl = new URL(raw).toString();
+  } catch {
+    throw new Error('Invalid URL');
+  }
+  return scrapeBrandFromUrl(targetUrl);
+}
+
 async function authenticate(request: Request, env: ApiEnv): Promise<RequestContext> {
   const authorization = request.headers.get('authorization');
   if (!authorization?.startsWith('Bearer ')) {
@@ -1225,6 +1364,11 @@ export async function handleRequest(request: Request, env: ApiEnv): Promise<Resp
     if (method === 'PUT' && orderStatusMatch) {
       const body = await request.json() as { status: 'Picking' | 'Invoiced'; invoiceNumber?: string };
       return jsonResponse(200, await handleTrendyolUpdateOrderStatus(ctx, orderStatusMatch[1], body), origin);
+    }
+
+    if (method === 'POST' && pathname === '/api/brand/scrape') {
+      const body = await request.json() as { url?: string };
+      return jsonResponse(200, await handleBrandScrape(ctx, body), origin);
     }
 
     return jsonResponse(404, { error: 'Not found' }, origin);
