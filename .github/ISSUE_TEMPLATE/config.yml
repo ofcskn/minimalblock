@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:ofcskn1@gmail.com
+    about: Report security vulnerabilities privately by email — do not use public issues.
+  - name: Question / Discussion
+    url: https://github.com/ofcskn/minimalblock/discussions
+    about: Ask questions, share ideas, or discuss the project in GitHub Discussions.
+  - name: Documentation
+    url: https://github.com/ofcskn/minimalblock/tree/main/docs/en
+    about: Browse the English documentation.
