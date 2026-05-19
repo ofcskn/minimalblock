@@ -4,4 +4,4 @@ export default {
   async fetch(request: Request, env: ApiEnv): Promise<Response> {
     return handleRequest(request, env);
   },
-} satisfies ExportedHandler<ApiEnv>;
+};

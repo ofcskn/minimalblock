@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import type { ImportedImageCandidate, ProductImportData } from '@minimalblock/core';
 import { GeminiImageClassifier, ImageDeduplicationService } from '@minimalblock/ai';
 
@@ -33,7 +32,7 @@ export class ImageIntelligencePipeline {
             headers: { 'user-agent': 'MinimalBlockBot/1.0', accept: 'image/*' },
           });
           if (!res.ok) return null;
-          return Buffer.from(await res.arrayBuffer());
+          return new Uint8Array(await res.arrayBuffer());
         } catch {
           return null;
         }
@@ -41,7 +40,7 @@ export class ImageIntelligencePipeline {
     );
 
     // Perceptual deduplication
-    const hashes = buffers.map((buf) => buf ? this.deduplicator.computeHash(new Uint8Array(buf)) : '0000000000000000');
+    const hashes = buffers.map((buf) => buf ? this.deduplicator.computeHash(buf) : '0000000000000000');
     const duplicateIndexes = new Set(this.deduplicator.findDuplicates(hashes));
 
     // Build base64 images for Gemini classification (only non-failed uploads)
@@ -50,7 +49,7 @@ export class ImageIntelligencePipeline {
       const buf = buffers[i];
       if (buf && candidates[i].mimeType && candidates[i].mimeType !== 'image/svg+xml') {
         geminiImages.push({
-          base64: buf.toString('base64'),
+          base64: btoa(String.fromCharCode(...buf)),
           mimeType: candidates[i].mimeType!,
           originalIndex: i,
         });
