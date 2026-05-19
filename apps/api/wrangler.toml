@@ -1,5 +1,5 @@
 name = "minimalblock"
-main = "dist/apps/api/worker.js"
+main = "../../dist/apps/api/worker.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
@@ -20,8 +20,3 @@ enabled = true
 # TRENDYOL_API_SECRET
 # TRENDYOL_MOCK
 
-[env.production]
-name = "minimalblock"
-
-[env.preview]
-name = "minimalblock-preview"
