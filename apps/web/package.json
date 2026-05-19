@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@lenserfight/cli": "^0.2.0",
     "@minimalblock/core": "workspace:*",
     "@minimalblock/data": "workspace:*",
     "@minimalblock/features": "workspace:*",
