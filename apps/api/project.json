@@ -73,12 +73,11 @@
       "dependsOn": ["build:worker"],
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "apps/api",
-        "command": "npx wrangler deploy"
+        "command": "npx wrangler deploy --config apps/api/wrangler.toml"
       },
       "configurations": {
         "preview": {
-          "command": "npx wrangler versions upload"
+          "command": "npx wrangler versions upload --config apps/api/wrangler.toml"
         }
       }
     },
@@ -86,16 +85,14 @@
       "dependsOn": ["build:worker"],
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "apps/api",
-        "command": "npx wrangler versions upload"
+        "command": "npx wrangler versions upload --config apps/api/wrangler.toml"
       }
     },
     "cf:dev": {
       "continuous": true,
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "apps/api",
-        "command": "npx wrangler dev ../../dist/apps/api/worker.js --port 8787"
+        "command": "npx wrangler dev dist/apps/api/worker.js --config apps/api/wrangler.toml --port 8787"
       }
     },
     "prune-lockfile": {

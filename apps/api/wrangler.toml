@@ -1,5 +1,5 @@
 name = "minimalblock"
-main = "../../dist/apps/api/worker.js"
+main = "dist/apps/api/worker.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 

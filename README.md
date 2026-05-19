@@ -152,8 +152,8 @@ When using Cloudflare's built-in CI/CD pipeline (**Workers & Pages â†’ Create â†
 |---|---|
 | Project name | `minimalblock` |
 | Build command | `nx build:worker api` |
-| Deploy command | `npx wrangler deploy` |
-| Non-production branch deploy command | `npx wrangler versions upload` |
+| Deploy command | `npx wrangler deploy --config apps/api/wrangler.toml` |
+| Non-production branch deploy command | `npx wrangler versions upload --config apps/api/wrangler.toml` |
 | Root directory | `/` |
 
 Add all secrets from the table above as **Environment Variables** in the Cloudflare dashboard before the first deploy.
