@@ -172,11 +172,13 @@ async function fetchAssetBase64(asset: MediaAsset): Promise<{ mimeType: string; 
   if (!response.ok) {
     throw new Error(`Failed to fetch asset: ${response.status}`);
   }
-  const arrayBuffer = await response.arrayBuffer();
-  return {
-    mimeType: asset.mimeType,
-    data: btoa(String.fromCharCode(...new Uint8Array(arrayBuffer))),
-  };
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return { mimeType: asset.mimeType, data: btoa(binary) };
 }
 
 async function uploadGeneratedModel(
