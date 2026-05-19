@@ -58,7 +58,7 @@ function AppRoutes() {
           <Route path="/" element={<GalleryPage user={user} />} />
           <Route path="/upload" element={<UploadPage user={user} />} />
           <Route path="/product/:id" element={<ProductDetailPage user={user} />} />
-          <Route path="/brand" element={<BrandPage />} />
+          <Route path="/brand" element={<BrandPage user={user} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

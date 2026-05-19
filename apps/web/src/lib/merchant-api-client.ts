@@ -60,6 +60,14 @@ export interface BatchResult {
   items: Array<{ status: 'SUCCESS' | 'ERROR'; failureReasons?: string[] }>;
 }
 
+export interface BrandScrapeResult {
+  name: string;
+  description: string;
+  logoUrl: string | null;
+  colors: string[];
+  website: string;
+}
+
 export class MerchantApiClient {
   constructor(
     private readonly baseUrl: string,
@@ -241,5 +249,12 @@ export class MerchantApiClient {
 
   getTrendyolUnapproved(page = 0): Promise<{ content: unknown[]; totalElements: number }> {
     return this.request(`/api/trendyol/unapproved?page=${page}`);
+  }
+
+  scrapeBrand(url: string): Promise<BrandScrapeResult> {
+    return this.request<BrandScrapeResult>('/api/brand/scrape', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
   }
 }

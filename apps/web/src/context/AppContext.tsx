@@ -6,8 +6,9 @@ import {
   SupabaseImageUploader,
   SupabaseEventsRepository,
   SupabaseEmbedViewsRepository,
+  SupabaseBrandRepository,
 } from '@minimalblock/data';
-import type { IProductRepository, IConversionRepository, IImageUploaderPort } from '@minimalblock/core';
+import type { IProductRepository, IConversionRepository, IImageUploaderPort, IBrandRepository } from '@minimalblock/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { MerchantApiClient } from '../lib/merchant-api-client.js';
 
@@ -19,6 +20,7 @@ interface AppContextValue {
   imageUploader: IImageUploaderPort;
   eventsRepo: SupabaseEventsRepository;
   embedViewsRepo: SupabaseEmbedViewsRepository;
+  brandRepo: IBrandRepository;
   apiClient: MerchantApiClient;
 }
 
@@ -39,6 +41,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       imageUploader: new SupabaseImageUploader(supabase),
       eventsRepo: new SupabaseEventsRepository(supabase),
       embedViewsRepo: new SupabaseEmbedViewsRepository(supabase),
+      brandRepo: new SupabaseBrandRepository(supabase),
       apiClient: new MerchantApiClient(apiBaseUrl, supabase),
     };
   }, []);
