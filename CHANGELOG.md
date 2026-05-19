@@ -12,6 +12,32 @@ Changelog entries are **automatically generated** by `scripts/generate-changelog
 
 ---
 
+
+## [0.7.0-preview] — 2026-05-19
+
+### Features
+
+- add brand identity page, hook, context, and API client **[apps/web]** — [`a94ee01`](https://github.com/ofcskn/btk_akademi_project/commit/a94ee01c0935237be844f67c99d480ca9202e9fa)
+  > Adds the full brand identity UI: BrandPage with logo upload, color palette
+
+### Documentation
+
+- add comprehensive documentation and project governance files — [`d5db92a`](https://github.com/ofcskn/btk_akademi_project/commit/d5db92ab3b2f550c62e6c4032f68bed05dc199fe)
+  > Rewrites README with full architecture diagram, tech stack table, quick-start
+
+### Maintenance
+
+- add commit tooling, build config, license, and skill files — [`578e620`](https://github.com/ofcskn/btk_akademi_project/commit/578e6202ee286b9d36ee138247d848ec29dd9384)
+  > Adds commitlint with conventional-commits config and husky hooks (commit-msg
+
+### Affected Packages
+
+`apps/web`
+
+### Contributors
+
+Thank you to **ÖMER FARUK COŞKUN** for contributing to this release.
+
 ## [Unreleased]
 
 ### Added

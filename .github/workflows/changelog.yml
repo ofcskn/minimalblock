@@ -1,0 +1,211 @@
+name: Changelog & Commit Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ── 1. Validate every commit message in the PR ───────────────────────────────
+  commitlint:
+    name: Validate Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate commit messages
+        run: |
+          pnpm exec commitlint \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }} \
+            --verbose
+
+  # ── 2. Validate PR title follows conventional commits ────────────────────────
+  pr-title:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$PR_TITLE" | pnpm exec commitlint --verbose
+
+  # ── 3. Check that a changeset was added (warn, not block) ────────────────────
+  changeset-check:
+    name: Changeset Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changeset or exempt label
+        id: check
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          HAS_CHANGESET=$(echo "$CHANGED" | grep -cE "^\.changeset/[^/]+\.md$" || true)
+          LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
+
+          if [ "$HAS_CHANGESET" -gt 0 ]; then
+            echo "status=found" >> "$GITHUB_OUTPUT"
+          elif echo "$LABELS" | grep -qiE "changelog-exempt|documentation|ci-only|no-changelog"; then
+            echo "status=exempt" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=missing" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report changeset status
+        run: |
+          STATUS="${{ steps.check.outputs.status }}"
+          if [ "$STATUS" = "found" ]; then
+            echo "✓ Changeset file detected."
+          elif [ "$STATUS" = "exempt" ]; then
+            echo "✓ PR is changelog-exempt (label detected)."
+          else
+            echo "⚠️  No changeset found."
+            echo ""
+            echo "If this change is user-visible, run: pnpm changeset"
+            echo "If this is docs/CI-only, add the 'changelog-exempt' label to skip this check."
+            echo ""
+            echo "Changesets let the release bot know what version bump is needed."
+          fi
+          # Warn only — does not block merge
+
+  # ── 4. Detect breaking changes ───────────────────────────────────────────────
+  breaking-changes:
+    name: Detect Breaking Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for breaking change indicators
+        run: |
+          BREAKING=$(git log \
+            origin/${{ github.base_ref }}..HEAD \
+            --format="%H %s" \
+            --no-merges \
+            | grep -E "^[a-f0-9]+ (feat|fix|refactor|perf|docs|style|test|build|ci|chore|revert|security|deps|infra|migration)(\([^)]+\))?!:" \
+            || true)
+
+          BREAKING_FOOTER=$(git log \
+            origin/${{ github.base_ref }}..HEAD \
+            --format="%b" \
+            --no-merges \
+            | grep "^BREAKING CHANGE:" \
+            || true)
+
+          if [ -n "$BREAKING" ] || [ -n "$BREAKING_FOOTER" ]; then
+            echo "⚠️  Breaking changes detected in this PR:"
+            echo ""
+            if [ -n "$BREAKING" ]; then echo "$BREAKING"; fi
+            if [ -n "$BREAKING_FOOTER" ]; then echo "$BREAKING_FOOTER"; fi
+            echo ""
+            echo "Checklist for breaking changes:"
+            echo "  [ ] Migration guide included in PR description"
+            echo "  [ ] Changeset added with 'major' bump"
+            echo "  [ ] Affected packages documented"
+            echo "  [ ] Deprecated APIs marked in code"
+          else
+            echo "✓ No breaking changes detected."
+          fi
+
+  # ── 5. Detect migration and security flags ───────────────────────────────────
+  migration-security-scan:
+    name: Migration & Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Supabase migrations
+        run: |
+          MIGRATION_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep -E "^supabase/migrations/.*\.sql$" || true)
+
+          if [ -n "$MIGRATION_FILES" ]; then
+            echo "📦 Supabase migration files detected:"
+            echo "$MIGRATION_FILES"
+            echo ""
+            echo "Ensure:"
+            echo "  [ ] Migration is backward-compatible OR breaking change is documented"
+            echo "  [ ] RLS policies are correct"
+            echo "  [ ] Migration has been tested locally with: pnpm supabase db reset"
+          else
+            echo "✓ No Supabase migration files changed."
+          fi
+
+      - name: Detect environment variable changes
+        run: |
+          ENV_CHANGES=$(git diff origin/${{ github.base_ref }}...HEAD \
+            -- "*.env*" "*.env.example" "docs/env-variables.md" "wrangler.toml" \
+            2>/dev/null | grep "^+" | grep -v "^+++" || true)
+
+          if [ -n "$ENV_CHANGES" ]; then
+            echo "🔐 Environment variable changes detected."
+            echo "Ensure docs/env-variables.md is updated."
+          else
+            echo "✓ No environment variable changes detected."
+          fi
+
+      - name: Security commit scan
+        run: |
+          SECURITY=$(git log \
+            origin/${{ github.base_ref }}..HEAD \
+            --format="%s" \
+            --no-merges \
+            | grep -iE "security|vulnerability|cve|xss|sqli|csrf|injection|auth bypass" \
+            || true)
+
+          if [ -n "$SECURITY" ]; then
+            echo "🔒 Security-related commits detected:"
+            echo "$SECURITY"
+            echo ""
+            echo "Ensure .github/SECURITY.md is up to date."
+          else
+            echo "✓ No security-flagged commits."
+          fi
