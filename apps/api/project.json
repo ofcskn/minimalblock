@@ -36,6 +36,68 @@
         }
       }
     },
+    "build:worker": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "browser",
+        "outputPath": "dist/apps/api",
+        "format": ["esm"],
+        "bundle": true,
+        "main": "apps/api/src/worker.ts",
+        "tsConfig": "apps/api/tsconfig.app.json",
+        "assets": ["apps/api/src/assets"],
+        "esbuildOptions": {
+          "sourcemap": false,
+          "outExtension": {
+            ".js": ".js"
+          },
+          "conditions": ["worker", "browser", "import", "default"]
+        }
+      },
+      "configurations": {
+        "development": {
+          "esbuildOptions": {
+            "sourcemap": true
+          }
+        },
+        "production": {
+          "esbuildOptions": {
+            "sourcemap": false
+          }
+        }
+      }
+    },
+    "deploy": {
+      "dependsOn": ["build:worker"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "npx wrangler deploy"
+      },
+      "configurations": {
+        "preview": {
+          "command": "npx wrangler versions upload"
+        }
+      }
+    },
+    "deploy:preview": {
+      "dependsOn": ["build:worker"],
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "npx wrangler versions upload"
+      }
+    },
+    "cf:dev": {
+      "continuous": true,
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "npx wrangler dev ../../dist/apps/api/worker.js --port 8787"
+      }
+    },
     "prune-lockfile": {
       "dependsOn": ["build"],
       "cache": true,
